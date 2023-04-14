@@ -254,7 +254,7 @@ PopulateParamsXDL::initParameters[PopulateParamsXDL::nInitParameters] = {
 const InitParamsXDL
 PopulateParamsXDL::initParametersFp16[PopulateParamsXDL::nInitParametersFp16] = {
   // M/block N/block K/block M/wave N/wave kPack forceUnroll bCopyMore
-  {128,  128,  4,  64,  64,  8,  true,  true},
+  {128, 128, 4, 64, 64, 8, true, true},
   {32,  128,  4,  32,  32,  8,  true,  true},
   {32, 64, 4, 32, 64, 4, true, true},
 };

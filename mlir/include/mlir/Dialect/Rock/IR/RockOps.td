@@ -366,7 +366,7 @@ def Rock_GridwiseGemmV2Op :
                    Rock_XdlopsGemmParamsAttr:$params)> {
   let summary = "Gridwise GEMM V2";
   let description = [{
-    The `rock.gridwise_gemm` op computes gridwise GEMM with XDLOPS.
+    The `rock.gridwise_gemm` op computes gridwise GEMM with acceleration.
   }];
   let assemblyFormat = [{
     `(` operands `)` `storeMethod` `(` $storeMethod `)` `features` `=` $features attr-dict `:` type(operands)
@@ -1063,9 +1063,9 @@ def Rock_BlockwiseGemmOp:
 // accounts for how we call these operations.
 defvar MfmaArgTypes = [F32,
                     VectorOfLengthAndType<[2, 4], [F32]>,
-                    VectorOfLengthAndType<[2, 4, 8], [F16, BF16]>,
-                    VectorOfLengthAndType<[4, 8], [I8, F8E5M2FNUZ, F8E4M3FNUZ]>];
-defvar MfmaResTypes = [VectorOfLengthAndType<[4, 16, 32], [F32, I32]>];
+                    VectorOfLengthAndType<[2, 4, 8, 16], [F16, BF16]>,
+                    VectorOfLengthAndType<[4, 8, 16], [I8, F8E5M2FNUZ, F8E4M3FNUZ]>];
+defvar MfmaResTypes = [VectorOfLengthAndType<[4, 8, 16, 32], [F32, I32, F16, BF16]>];
 
 // blockwise_gemm_v2
 def Rock_BlockwiseGemmV2Op:
@@ -1078,6 +1078,7 @@ def Rock_BlockwiseGemmV2Op:
                    MemRefOf<MfmaArgTypes>:$bufferB,
                    MemRefOf<MfmaResTypes>:$matrixC,
                    StrAttr:$arch,
+                   Rock_GemmFeaturesAttr:$features,
                    I32Attr:$blockSize,
                    Rock_XdlopsGemmParamsAttr:$params)>{
   let summary = "Blockwise GEMM XDLOPS version";
@@ -1091,7 +1092,7 @@ def Rock_BlockwiseGemmV2Op:
   }];
   let assemblyFormat = [{
     $matrixC `+` `` `=` $bufferA `from` $matrixA `[` $waveOffsetA `]` `*`
-                        $bufferB `from` $matrixB `[` $waveOffsetB `]` attr-dict
+                        $bufferB `from` $matrixB `[` $waveOffsetB `]` `features` `=` $features attr-dict
     `:` type($matrixC) `+` `` `=` type($bufferA) `from` type($matrixA) `*`
                                   type($bufferB) `from` type($matrixB)
   }];
@@ -1128,6 +1129,7 @@ def Rock_XdlopsGemmV2Op:
                    MemRefRankOf<MfmaArgTypes, [1]>:$matrixB,
                    MemRefRankOf<MfmaResTypes , [1]>:$matrixC,
                    StrAttr:$arch,
+                   Rock_GemmFeaturesAttr:$features,
                    Rock_XdlopsGemmParamsAttr:$params)> {
   let summary = "XDLOPS GEMM V2";
   let description = [{
@@ -1137,7 +1139,7 @@ def Rock_XdlopsGemmV2Op:
     Matrices A and B reside in LDS, the buffers live in registers, C is a vector
   }];
   let assemblyFormat = [{
-    $matrixC `+` `` `=` $matrixA`[`$mRepeat`]` `*` $matrixB`[`$nRepeat`]` attr-dict
+    $matrixC `+` `` `=` $matrixA`[`$mRepeat`]` `*` $matrixB`[`$nRepeat`]` `features` `=` $features attr-dict
     `:` type($matrixC) `+` `` `=` type($matrixA) `*` type($matrixB)
   }];
   let hasVerifier = 1;
