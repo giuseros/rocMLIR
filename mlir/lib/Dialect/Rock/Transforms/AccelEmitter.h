@@ -65,6 +65,10 @@ struct AccelEmitterParams {
   // back and generate multiple sets of mRepeats*nRepeats vectors
   int64_t nResultVectors;
 
+  int64_t waveOffsetA;
+  int64_t waveOffsetB;
+  int64_t inputSpanLen;
+
   Type argTypeA;            // Type of the arguments (might be scalar or vector)
   Type argTypeB;            // Type of the arguments (might be scalar or vector)
   VectorType accVectorType; // Accumulator vector type (always vector type)
@@ -107,7 +111,7 @@ struct AccelEmitter {
   virtual Value computeLdsSourceOffset(OpBuilder &kBuilder, Value k_i,
                                        OpBuilder &dBuilder, Value d_i,
                                        OpBuilder &builder, Value dPerBlock,
-                                       Location loc, Value baseOffset,
+                                       Location loc, Value baseOffset, Value dWaves,
                                        Value laneId) = 0;
 
   /// Compute the output transform map to be used to store the result of the
@@ -115,7 +119,7 @@ struct AccelEmitter {
   virtual ArrayAttr computeOutputTransforms(PatternRewriter &b, Location loc,
                                             int64_t matrixM, int64_t matrixN,
                                             int64_t blockSize, int64_t gridSize,
-                                            Value regC) = 0;
+                                            Value regC, GemmGridLayout gridLayout) = 0;
 
   /// Convert from memref<?xvector<?xT>> to memref<?xD> where the source T
   /// is the accumulator type and D is the destination type
@@ -151,13 +155,13 @@ struct MfmaEmitter : public AccelEmitter {
   Value computeLdsSourceOffset(OpBuilder &kBuilder, Value k_i,
                                OpBuilder &dBuilder, Value d_i,
                                OpBuilder &builder, Value dPerBlock,
-                               Location loc, Value baseOffset,
+                               Location loc, Value baseOffset, Value dWaves,
                                Value laneId) override;
 
   ArrayAttr computeOutputTransforms(PatternRewriter &b, Location loc,
                                     int64_t matrixM, int64_t matrixN,
                                     int64_t blockSize, int64_t gridSize,
-                                    Value regC) override;
+                                    Value regC, GemmGridLayout gridLayout) override;
 
 private:
   /// Initialize the emitter parameters for mfma
@@ -181,13 +185,13 @@ struct WmmaEmitter : public AccelEmitter {
   Value computeLdsSourceOffset(OpBuilder &kBuilder, Value k_i,
                                OpBuilder &dBuilder, Value d_i,
                                OpBuilder &builder, Value dPerBlock,
-                               Location loc, Value baseOffset,
+                               Location loc, Value baseOffset, Value dWaves,
                                Value laneId) override;
 
   ArrayAttr computeOutputTransforms(PatternRewriter &b, Location loc,
                                     int64_t matrixM, int64_t matrixN,
                                     int64_t blockSize, int64_t gridSize,
-                                    Value regC) override;
+                                    Value regC, GemmGridLayout gridLayout) override;
 
 private:
   /// Initialize the emitter parameters for wmma

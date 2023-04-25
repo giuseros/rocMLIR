@@ -335,6 +335,8 @@ struct BlockwiseGemmAccelRewritePattern
 
     Value sourceOffsetA = adaptor.getWaveOffsetA();
     Value sourceOffsetB = adaptor.getWaveOffsetB();
+    int64_t mWaves = M / mPerWave;
+    int64_t nWaves = N / nPerWave;
 
     auto accelEmitterPtr = rock::accel::AccelEmitter::select(
         op.getFeatures(), dataTypeA, dataTypeB, arch, tuningParams);
@@ -352,6 +354,8 @@ struct BlockwiseGemmAccelRewritePattern
     int64_t nPerAccel = params.nPerAccel;
     int64_t kBase = params.kBase;
     int64_t kpackPerThread = params.kpackPerThread;
+    Value mWavesConstantOp = b.create<ConstantIndexOp>(loc, mWaves);
+    Value nWavesConstantOp = b.create<ConstantIndexOp>(loc, nWaves);
 
     auto tid = b.create<WorkitemIdOp>(loc, b.getIndexType());
     const int64_t waveSize = rock::lookupArchInfo(arch).waveSize;
@@ -383,15 +387,18 @@ struct BlockwiseGemmAccelRewritePattern
 
     auto ldsToRegisterCopy = [&](Location loc, OpBuilder mnb, OpBuilder kb,
                                  Value sourceBase, Value mn_i, Value MN,
-                                 Value k_i, Value K, Value mnPerMfmaGroup,
+                                 Value k_i, Value K, Value mnPerMfmaGroup, Value mnWaves,
                                  Type ldsBufferElemType, Type dataType,
                                  Value ldsOrig, Value regDest) {
       // Compute source offset
       Value sourceOffset = accelEmitterPtr->computeLdsSourceOffset(
-          kb, k_i, mnb, mn_i, b, MN, loc, sourceBase, laneId);
+          kb, k_i, mnb, mn_i, b, MN, loc, sourceBase, mnWaves, laneId);
 
       Value value = kb.create<memref::LoadOp>(loc, ldsBufferElemType, ldsOrig,
                                               sourceOffset);
+
+      auto bid = b.create<WorkgroupIdOp>(loc, b.getIndexType());
+      // kb.create<mlir::gpu::PrintfOp>(loc, "threadid %d, blockid %d - %d\n",ValueRange{tid, bid, sourceOffset});
 
       auto bufferType = regDest.getType().cast<MemRefType>();
       Type bufferElementType = bufferType.getElementType();
@@ -440,7 +447,7 @@ struct BlockwiseGemmAccelRewritePattern
 
     auto ldsToRegisterCopyKdim =
         [&](OpBuilder outerLoopB, AffineForOp outerLoopBodyOp, Value sourceBase,
-            Value MN, Value mnPerMfmaGroup, Type ldsBufferElemType,
+            Value MN, Value mnPerMfmaGroup, Value mnWaves, Type ldsBufferElemType,
             Type dataType, Value ldsOrig, Value regDest) {
           auto innerLoopK =
               outerLoopB.create<AffineForOp>(loc, 0, kpackPerThread);
@@ -454,7 +461,7 @@ struct BlockwiseGemmAccelRewritePattern
             ldsToRegisterCopy(loc, outerLoopB, ilkb, sourceBase,
                               outerLoopBodyOp.getInductionVar(), MN,
                               innerLoopK.getInductionVar(),
-                              KPerThreadConstantOp, mnPerMfmaGroup,
+                              KPerThreadConstantOp, mnPerMfmaGroup, mnWaves,
                               ldsBufferElemType, dataType, ldsOrig, regDest);
           }
         };
@@ -467,7 +474,7 @@ struct BlockwiseGemmAccelRewritePattern
     auto olmb = ConversionPatternRewriter::atBlockBegin(outerLoopM.getBody(),
                                                         b.getListener());
     ldsToRegisterCopyKdim(olmb, outerLoopM, sourceOffsetA, MConstantOp,
-                          mPerAccelConstantOp, bufferElemTypeA, dataTypeA,
+                          mPerAccelConstantOp, mWavesConstantOp, bufferElemTypeA, dataTypeA,
                           op.getMatrixA(), bufferA);
 
     // load B from LDS into registers
@@ -478,7 +485,7 @@ struct BlockwiseGemmAccelRewritePattern
     auto olnb = ConversionPatternRewriter::atBlockBegin(outerLoopN.getBody(),
                                                         olmb.getListener());
     ldsToRegisterCopyKdim(olnb, outerLoopN, sourceOffsetB, NConstantOp,
-                          nPerAccelConstantOp, bufferElemTypeB, dataTypeB,
+                          nPerAccelConstantOp, nWavesConstantOp, bufferElemTypeB, dataTypeB,
                           op.getMatrixB(), bufferB);
 
     b.eraseOp(op);

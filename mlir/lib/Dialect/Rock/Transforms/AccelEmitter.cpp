@@ -108,11 +108,14 @@ AccelEmitterParams MfmaEmitter::initAccelEmitterParams(
   params.mRepeats = mfmaGroup.getMRepeats(mPerWave);
   params.nRepeats = mfmaGroup.getNRepeats(nPerWave);
   params.nResultVectors = mfmaGroup.getImms().size();
-  params.mPerAccel = mfmaGroup.getLenPerMfmaGroup(mPerWave);
-  params.nPerAccel = mfmaGroup.getLenPerMfmaGroup(nPerWave);
+  params.mPerAccel = mfmaAttr.mfmaNonKDim * mfmaGroup.getImms().size();
+  params.nPerAccel = mfmaAttr.mfmaNonKDim * mfmaAttr.blocksMfma;
   params.kpackPerThread =
       (mfmaAttr.isKReduction ? kpackPerBlock / mfmaAttr.inputSpansPerMfmaIn
                              : kpackPerBlock);
+
+  params.waveOffsetA = mfmaAttr.mfmaNonKDim * mfmaGroup.getImms().size();
+  params.waveOffsetB = mfmaAttr.mfmaNonKDim * mfmaAttr.blocksMfma;
 
   // Accelerator data types
   params.argTypeA = mfmaGroup.getArgTypeA();
@@ -150,7 +153,8 @@ void MfmaEmitter::emitThreadwiseLoop(OpBuilder &b, Location loc, Value argA,
 ArrayAttr MfmaEmitter::computeOutputTransforms(PatternRewriter &b, Location loc,
                                                int64_t matrixM, int64_t matrixN,
                                                int64_t blockSize,
-                                               int64_t gridSize, Value regC) {
+                                               int64_t gridSize, Value regC,
+                                               GemmGridLayout gridLayout) {
 
   // Extract relevant tuning parameters
   int64_t mPerBlock = tuningParams.getMPerBlock();
@@ -171,6 +175,7 @@ ArrayAttr MfmaEmitter::computeOutputTransforms(PatternRewriter &b, Location loc,
   int64_t mBlocks = matrixM / mPerBlock;
   int64_t gStride = mBlocks * nBlocks;
   int64_t nWaves = nPerBlock / nPerWave;
+  int64_t mWaves = mPerBlock / mPerWave;
   int64_t rowGroupSize = mfmaAttr.rowGroupSize;
   int64_t rowGroupsPerBlock = mfmaAttr.rowGroupsPerBlock;
   int64_t inputSpanLen = mfmaAttr.inputSpanLen;
@@ -183,13 +188,23 @@ ArrayAttr MfmaEmitter::computeOutputTransforms(PatternRewriter &b, Location loc,
   int64_t blocksInOutRegs = mfmaAttr.blocksInOutRegs;
   int64_t blocksPerRepeat = (mPerRepeat * nPerRepeat) / (m * n);
   int64_t wavesInKernelBlock = blockSize / waveSize;
+  int64_t mPerMfmaGroup = mfmaAttr.mfmaNonKDim * nResultVectors;
+  int64_t nPerMfmaGroup = mfmaAttr.mfmaNonKDim * mfmaAttr.blocksMfma;
+
 
   int64_t retNumElements = accVectorType.getNumElements();
   int64_t numElements = retNumElements * mRepeats * nRepeats * nResultVectors;
   TopDownTMBuilder splitMemoryCoords(b, {"bid", "tid", "item"},
                                      {gridSize, blockSize, numElements}, loc);
-  splitMemoryCoords.merge({"g", "m", "n"}, {0, 1, 2}, {"bid"},
-                          {gridSize / gStride, gStride / nBlocks, nBlocks});
+
+  if (rock::bitEnumContainsAll(gridLayout, GemmGridLayout::byrows)){
+    splitMemoryCoords.merge({"g", "m", "n"}, {0, 1, 2}, {"bid"},
+                            {gridSize / gStride, gStride / nBlocks, nBlocks});
+  } else if (rock::bitEnumContainsAll(gridLayout, GemmGridLayout::bycols)){
+    splitMemoryCoords.merge({"g", "n", "m"}, {0, 1, 2}, {"bid"},
+                            {gridSize / gStride, gStride / mBlocks, mBlocks});
+  }
+
   splitMemoryCoords.merge(
       {"wave", "m_tid", "n_tid"}, {3, 4, 5}, "tid",
       {wavesInKernelBlock, waveSize / inputSpanLen, inputSpanLen});
@@ -236,11 +251,11 @@ ArrayAttr MfmaEmitter::computeOutputTransforms(PatternRewriter &b, Location loc,
   toMatrixC.embed(
       "gemmM", 1, matrixM,
       {"m", "wave_m", "m_tid", "m_i", "blk_row", "vec_group", "vec_item"},
-      {mPerBlock, mPerWave, rowGroupSize, mPerRepeat, m,
+      {mPerBlock, mPerMfmaGroup, rowGroupSize, mPerMfmaGroup*mWaves, m,
        inputSpansPerMfmaIn * rowGroupSize, 1});
   toMatrixC.embed("gemmN", 2, matrixN,
                   {"n", "wave_n", "n_i", "blk_col", "n_tid"},
-                  {nPerBlock, nPerWave, nPerRepeat, n, 1});
+                  {nPerBlock, nPerMfmaGroup, nPerMfmaGroup*nWaves, n, 1});
   TransformMapAttr toMatrixCAttr = toMatrixC.get();
 
   ArrayAttr idToMatrixCMaps =
@@ -251,7 +266,7 @@ ArrayAttr MfmaEmitter::computeOutputTransforms(PatternRewriter &b, Location loc,
 Value MfmaEmitter::computeLdsSourceOffset(OpBuilder &kBuilder, Value k_i,
                                           OpBuilder &dBuilder, Value d_i,
                                           OpBuilder &builder, Value dPerBlock,
-                                          Location loc, Value sourceBase,
+                                          Location loc, Value sourceBase, Value dWaves,
                                           Value laneId) {
 
   // Extract relevant emitter parameters
@@ -259,40 +274,44 @@ Value MfmaEmitter::computeLdsSourceOffset(OpBuilder &kBuilder, Value k_i,
   int64_t nPerAccel = accelEmitterParams.nPerAccel;
   int64_t inputSpanLen = mfmaAttr.inputSpanLen;
   int64_t inputSpansPerMfmaIn = mfmaAttr.inputSpansPerMfmaIn;
+  int64_t kpackPerBlock = tuningParams.getKpackPerBlock();
   bool isKReduction = mfmaAttr.isKReduction;
+  Value inputSpanLenConstantOp =
+      builder.create<ConstantIndexOp>(loc, inputSpanLen);
+
+  Value mnWaves = builder.create<MulIOp>(loc, dWaves, inputSpanLenConstantOp);
 
   Value sourceOffset = sourceBase;
   if (!isKReduction) {
-    // srcOffset = k_i * MN + laneId + mPerMfmaGroup * mn_i;
-    Value mnPerMfmaGroup = builder.create<ConstantIndexOp>(loc, nPerAccel);
+    // srcOffset = k_i * MN + laneId + dWaves * d_i;
     sourceOffset = builder.create<AddIOp>(loc, sourceOffset, laneId);
     sourceOffset = dBuilder.create<AddIOp>(
-        loc, sourceOffset, dBuilder.create<MulIOp>(loc, mnPerMfmaGroup, d_i));
-    sourceOffset = kBuilder.create<AddIOp>(
-        loc, sourceOffset, kBuilder.create<MulIOp>(loc, dPerBlock, k_i));
+        loc, sourceOffset, dBuilder.create<MulIOp>(loc, mnWaves, d_i));
+    sourceOffset = kBuilder.create<AddIOp>(loc, sourceOffset,
+                                      kBuilder.create<MulIOp>(loc, dPerBlock, k_i));
   } else {
-    // srcOffset = (k_i * input_span_per_mfma + blk_id) * MN + blk_td + mn_i
-    // * input_span_length;
-    Value inputSpanLenConstantOp =
-        builder.create<ConstantIndexOp>(loc, inputSpanLen);
+    // srcOffset = (k_i + input_span_per_mfma * blk_id) * MN + blk_td + d_i
+    // * dWaves;
     Value inputSpansPerMfmaInConstantOp =
         builder.create<ConstantIndexOp>(loc, inputSpansPerMfmaIn);
+    Value kpackPerBlockConstantOp =
+        builder.create<ConstantIndexOp>(loc, accelEmitterParams.kpackPerThread);
     Value blk_id = builder.create<DivUIOp>(loc, laneId, inputSpanLenConstantOp);
     Value blk_td = builder.create<RemUIOp>(loc, laneId, inputSpanLenConstantOp);
 
     sourceOffset = builder.create<AddIOp>(loc, sourceOffset, blk_td);
     sourceOffset = dBuilder.create<AddIOp>(
         loc, sourceOffset,
-        dBuilder.create<MulIOp>(loc, inputSpanLenConstantOp, d_i));
+        dBuilder.create<MulIOp>(loc, mnWaves, d_i));
     sourceOffset = kBuilder.create<AddIOp>(
         loc, sourceOffset,
         kBuilder.create<MulIOp>(
             loc,
             kBuilder.create<AddIOp>(
                 loc,
-                kBuilder.create<MulIOp>(loc, k_i,
-                                        inputSpansPerMfmaInConstantOp),
-                blk_id),
+                kBuilder.create<MulIOp>(loc, blk_id,
+                                        kpackPerBlockConstantOp),
+                k_i),
             dPerBlock));
   }
   return sourceOffset;
@@ -315,6 +334,8 @@ AccelEmitterParams WmmaEmitter::initAccelEmitterParams(
   // Extract relevant tuning parameters
   int64_t kpackPerBlock = tuningParams.getKpackPerBlock();
   int64_t kPack = tuningParams.getKpack();
+  int64_t mPerWave = tuningParams.getMPerWave();
+  int64_t nPerWave = tuningParams.getNPerWave();
 
   params.mRepeats = wmmaInsn.mRepeats;
   params.nRepeats = wmmaInsn.nRepeats;
@@ -324,6 +345,9 @@ AccelEmitterParams WmmaEmitter::initAccelEmitterParams(
   params.mPerAccel = wmmaInsn.inputLen;
   params.nPerAccel = wmmaInsn.inputLen;
   params.kBasePerThread = kpackPerBlock * kPack / params.kBase;
+
+  params.waveOffsetA = mPerWave;
+  params.waveOffsetB = nPerWave;
 
   params.argTypeA = wmmaInsn.argTypeA;
   params.argTypeB = wmmaInsn.argTypeB;
@@ -335,7 +359,7 @@ AccelEmitterParams WmmaEmitter::initAccelEmitterParams(
 Value WmmaEmitter::computeLdsSourceOffset(OpBuilder &kBuilder, Value k_i,
                                           OpBuilder &dBuilder, Value d_i,
                                           OpBuilder &builder, Value dPerBlock,
-                                          Location loc, Value sourceBase,
+                                          Location loc, Value sourceBase, Value dWaves,
                                           Value laneId) {
 
   // srcOffset = k_i * MN + (laneId % wmmaInputLen) + wmmaInputLen * mn_i;
@@ -366,7 +390,7 @@ void WmmaEmitter::emitThreadwiseLoop(OpBuilder &b, Location loc, Value argA,
 ArrayAttr WmmaEmitter::computeOutputTransforms(PatternRewriter &b, Location loc,
                                                int64_t matrixM, int64_t matrixN,
                                                int64_t blockSize,
-                                               int64_t gridSize, Value regC) {
+                                               int64_t gridSize, Value regC, GemmGridLayout gridLayout) {
 
   // Extract relevant tuning parameters
   int64_t mPerBlock = tuningParams.getMPerBlock();

@@ -392,6 +392,7 @@ createGlobalLoadLoop(PatternRewriter &b, Location loc, GpuAllocOp loadBuffer,
         loc, loadType, tensor, outerLoop.getValidity(/*domain=*/0),
         outerLoop.getLowerCoords(/*domain=*/0));
 
+    // b.create<mlir::gpu::PrintfOp>(loc, "threadid %d, blockid %d - (%d-%d-%d)\n",ValueRange{tid, bid, outerLoop.getLowerCoords(0)[0], outerLoop.getLowerCoords(0)[1], outerLoop.getLowerCoords(0)[2]});
     b.create<InBoundsStoreOp>(loc, loaded, loadBuffer,
                               outerLoop.getLowerCoords(/*domain*/ 1)[3]);
   }
@@ -556,6 +557,9 @@ createLdsStoreLoop(PatternRewriter &b, Location loc, Value storeBuffer,
     else
       b.create<memref::StoreOp>(loc, toStore, rawBuffer,
                                 loop.getLowerCoords(/*domain=*/1));
+
+      auto bid = b.create<WorkgroupIdOp>(loc, b.getIndexType());
+      // b.create<mlir::gpu::PrintfOp>(loc, "threadid %d, blockid %d - %d\n",ValueRange{tid, bid, loop.getLowerCoords(1)[0]});
   }
   return loop;
 }
@@ -1039,8 +1043,14 @@ struct GridwiseGemmAccelRewritePattern
     GemmDimension aVectorDim;
     GemmDimension bVectorDim;
 
+
     SmallVector<StringRef, 3> bidGridOrder = {"g_block", "m_block", "n_block"};
     SmallVector<int64_t, 3> bidGridLengths = {G, mBlocks, nBlocks};
+
+    if (rock::bitEnumContainsAll(op.getGridLayout(), GemmGridLayout::bycols)){
+      SmallVector<StringRef, 3> bidGridOrder = {"g_block", "n_block", "m_block"};
+      SmallVector<int64_t, 3> bidGridLengths = {G, nBlocks, mBlocks};
+    }
 
     int64_t aCopyPerThread = (kPerBlock * mPerBlock) / blockSize;
     int64_t bCopyPerThread = (kPerBlock * nPerBlock) / blockSize;
@@ -1154,7 +1164,6 @@ struct GridwiseGemmAccelRewritePattern
     // Obtain Accelerator-related attributes.
     int64_t mPerWave = tuningParams.getMPerWave();
     int64_t nPerWave = tuningParams.getNPerWave();
-    // int64_t MWaves = mPerBlock / mPerWave;
     int64_t nWaves = nPerBlock / nPerWave;
 
     auto mPerWaveConstantOp = b.create<ConstantIndexOp>(loc, mPerWave);
@@ -1274,8 +1283,10 @@ struct GridwiseGemmAccelRewritePattern
     auto waveId_n = b.create<RemUIOp>(loc, waveId, nWavesConstantOp);
 
     Value mMyWaveOffsetA, mMyWaveOffsetB;
-    mMyWaveOffsetA = b.create<MulIOp>(loc, waveId_m, mPerWaveConstantOp);
-    mMyWaveOffsetB = b.create<MulIOp>(loc, waveId_n, nPerWaveConstantOp);
+    Value waveOffsetAConstantOp = b.create<ConstantIndexOp>(loc, params.waveOffsetA);
+    Value waveOffsetBConstantOp = b.create<ConstantIndexOp>(loc, params.waveOffsetB);
+    mMyWaveOffsetA = b.create<MulIOp>(loc, waveId_m, waveOffsetAConstantOp);
+    mMyWaveOffsetB = b.create<MulIOp>(loc, waveId_n, waveOffsetBConstantOp);
 
     // Logic to setup buffers for blockwise_gemm_accel.
 
@@ -1368,6 +1379,7 @@ struct GridwiseGemmAccelRewritePattern
       b.eraseOp(loopOp);
     }
 
+
     // -----
 
     // Matrix C write out logic.
@@ -1377,7 +1389,7 @@ struct GridwiseGemmAccelRewritePattern
     Value convertedC = b.create<rock::GpuAllocOp>(loc, convertedCType);
 
     ArrayAttr idToMatrixCMaps = accelEmitterPtr->computeOutputTransforms(
-        b, loc, M, N, blockSize, gridSize, regCAllocOp);
+        b, loc, M, N, blockSize, gridSize, regCAllocOp, op.getGridLayout());
 
     Value registerC = accelEmitterPtr->computeOutputConversion(
         b, loc, M, N, blockSize, gridSize, regCAllocOp, convertedC,
