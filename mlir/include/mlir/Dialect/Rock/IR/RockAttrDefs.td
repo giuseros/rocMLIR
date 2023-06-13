@@ -339,32 +339,6 @@ def Rock_GemmFeatures : I32BitEnumAttr<"GemmFeatures",
 
 def Rock_GemmFeaturesAttr : EnumAttr<Rock_Dialect, Rock_GemmFeatures, "GemmFeatures">;
 
-// GEMM LDS layout
-def Rock_GemmBlockLayout_Interleaved: I32BitEnumAttrCaseBit<"interleaved", 0>;
-def Rock_GemmBlockLayout_Grouped : I32BitEnumAttrCaseBit<"grouped", 1>;
-
-def Rock_GemmBlockLayout : I32BitEnumAttr<"GemmBlockLayout",
-    "LDS layout",
-    [Rock_GemmBlockLayout_Interleaved, Rock_GemmBlockLayout_Grouped]> {
-  let cppNamespace = "::mlir::rock";
-  let genSpecializedAttr = 0;
-}
-
-def Rock_GemmBlockLayoutAttr : EnumAttr<Rock_Dialect, Rock_GemmBlockLayout, "GemmBlockLayout">;
-
-// GEMM Block layout
-def Rock_GemmGridLayout_ByRows: I32BitEnumAttrCaseBit<"byrows", 0>;
-def Rock_GemmGridLayout_ByCols: I32BitEnumAttrCaseBit<"bycols", 1>;
-
-def Rock_GemmGridLayout : I32BitEnumAttr<"GemmGridLayout",
-    "Block layout",
-    [Rock_GemmGridLayout_ByRows, Rock_GemmGridLayout_ByCols]> {
-  let cppNamespace = "::mlir::rock";
-  let genSpecializedAttr = 0;
-}
-
-def Rock_GemmGridLayoutAttr : EnumAttr<Rock_Dialect, Rock_GemmGridLayout, "GemmGridLayout">;
-
 // Misc Attrs
 def Rock_PrefillAttr : Rock_Attr<"Prefill"> {
   let mnemonic = "rock.prefill";

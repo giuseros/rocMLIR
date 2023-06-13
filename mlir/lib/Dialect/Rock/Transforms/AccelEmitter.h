@@ -1,4 +1,3 @@
-
 //===- AccelEmitter.cpp - MLIR helper to emit acceleration intrinsics
 //---------------===//
 //
@@ -65,8 +64,6 @@ struct AccelEmitterParams {
   // back and generate multiple sets of mRepeats*nRepeats vectors
   int64_t nResultVectors;
 
-  int64_t waveOffsetA;
-  int64_t waveOffsetB;
   int64_t inputSpanLen;
 
   Type argTypeA;            // Type of the arguments (might be scalar or vector)
@@ -111,15 +108,15 @@ struct AccelEmitter {
   virtual Value computeLdsSourceOffset(OpBuilder &kBuilder, Value k_i,
                                        OpBuilder &dBuilder, Value d_i,
                                        OpBuilder &builder, Value dPerBlock,
-                                       Location loc, Value baseOffset, Value dWaves,
-                                       Value laneId) = 0;
+                                       Location loc, Value baseOffset,
+                                       Value dWaves, Value laneId) = 0;
 
   /// Compute the output transform map to be used to store the result of the
   /// matrix multiplication tile
   virtual ArrayAttr computeOutputTransforms(PatternRewriter &b, Location loc,
                                             int64_t matrixM, int64_t matrixN,
                                             int64_t blockSize, int64_t gridSize,
-                                            Value regC, GemmGridLayout gridLayout) = 0;
+                                            Value regC) = 0;
 
   /// Convert from memref<?xvector<?xT>> to memref<?xD> where the source T
   /// is the accumulator type and D is the destination type
@@ -161,7 +158,7 @@ struct MfmaEmitter : public AccelEmitter {
   ArrayAttr computeOutputTransforms(PatternRewriter &b, Location loc,
                                     int64_t matrixM, int64_t matrixN,
                                     int64_t blockSize, int64_t gridSize,
-                                    Value regC, GemmGridLayout gridLayout) override;
+                                    Value regC) override;
 
 private:
   /// Initialize the emitter parameters for mfma
@@ -191,7 +188,7 @@ struct WmmaEmitter : public AccelEmitter {
   ArrayAttr computeOutputTransforms(PatternRewriter &b, Location loc,
                                     int64_t matrixM, int64_t matrixN,
                                     int64_t blockSize, int64_t gridSize,
-                                    Value regC, GemmGridLayout gridLayout) override;
+                                    Value regC) override;
 
 private:
   /// Initialize the emitter parameters for wmma

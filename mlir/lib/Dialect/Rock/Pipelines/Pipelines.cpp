@@ -183,7 +183,8 @@ void rock::buildBackendPipeline(OpPassManager &pm,
   pm.addNestedPass<gpu::GPUFuncOp>(
       amdgpu::createAmdgpuEmulateAtomicsPass({options.chip}));
   pm.addPass(createLowerGpuOpsToROCDLOpsPass(
-      options.chip, options.indexBitwidth, /*useBarePtrCallConv=*/true, gpu::amd::Runtime::HIP));
+      options.chip, options.indexBitwidth, /*useBarePtrCallConv=*/true,
+      gpu::amd::Runtime::HIP));
   pm.addPass(createGpuSerializeToHsacoPass(options.triple, options.chip,
                                            options.features, options.optLevel));
 }

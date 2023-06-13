@@ -387,9 +387,9 @@ struct BlockwiseGemmAccelRewritePattern
 
     auto ldsToRegisterCopy = [&](Location loc, OpBuilder mnb, OpBuilder kb,
                                  Value sourceBase, Value mn_i, Value MN,
-                                 Value k_i, Value K, Value mnPerMfmaGroup, Value mnWaves,
-                                 Type ldsBufferElemType, Type dataType,
-                                 Value ldsOrig, Value regDest) {
+                                 Value k_i, Value K, Value mnPerMfmaGroup,
+                                 Value mnWaves, Type ldsBufferElemType,
+                                 Type dataType, Value ldsOrig, Value regDest) {
       // Compute source offset
       Value sourceOffset = accelEmitterPtr->computeLdsSourceOffset(
           kb, k_i, mnb, mn_i, b, MN, loc, sourceBase, mnWaves, laneId);
@@ -398,7 +398,8 @@ struct BlockwiseGemmAccelRewritePattern
                                               sourceOffset);
 
       auto bid = b.create<WorkgroupIdOp>(loc, b.getIndexType());
-      // kb.create<mlir::gpu::PrintfOp>(loc, "threadid %d, blockid %d - %d\n",ValueRange{tid, bid, sourceOffset});
+      // kb.create<mlir::gpu::PrintfOp>(loc, "threadid %d, blockid %d -
+      // %d\n",ValueRange{tid, bid, sourceOffset});
 
       auto bufferType = regDest.getType().cast<MemRefType>();
       Type bufferElementType = bufferType.getElementType();
@@ -445,26 +446,27 @@ struct BlockwiseGemmAccelRewritePattern
       }
     };
 
-    auto ldsToRegisterCopyKdim =
-        [&](OpBuilder outerLoopB, AffineForOp outerLoopBodyOp, Value sourceBase,
-            Value MN, Value mnPerMfmaGroup, Value mnWaves, Type ldsBufferElemType,
-            Type dataType, Value ldsOrig, Value regDest) {
-          auto innerLoopK =
-              outerLoopB.create<AffineForOp>(loc, 0, kpackPerThread);
-          auto ilkb = ConversionPatternRewriter::atBlockBegin(
-              innerLoopK.getBody(), outerLoopB.getListener());
-          {
-            OpBuilder::InsertionGuard guard(b);
-            b.setInsertionPoint(outerLoopBodyOp);
-            OpBuilder::InsertionGuard guardBody(outerLoopB);
-            outerLoopB.setInsertionPointToStart(outerLoopBodyOp.getBody());
-            ldsToRegisterCopy(loc, outerLoopB, ilkb, sourceBase,
-                              outerLoopBodyOp.getInductionVar(), MN,
-                              innerLoopK.getInductionVar(),
-                              KPerThreadConstantOp, mnPerMfmaGroup, mnWaves,
-                              ldsBufferElemType, dataType, ldsOrig, regDest);
-          }
-        };
+    auto ldsToRegisterCopyKdim = [&](OpBuilder outerLoopB,
+                                     AffineForOp outerLoopBodyOp,
+                                     Value sourceBase, Value MN,
+                                     Value mnPerMfmaGroup, Value mnWaves,
+                                     Type ldsBufferElemType, Type dataType,
+                                     Value ldsOrig, Value regDest) {
+      auto innerLoopK = outerLoopB.create<AffineForOp>(loc, 0, kpackPerThread);
+      auto ilkb = ConversionPatternRewriter::atBlockBegin(
+          innerLoopK.getBody(), outerLoopB.getListener());
+      {
+        OpBuilder::InsertionGuard guard(b);
+        b.setInsertionPoint(outerLoopBodyOp);
+        OpBuilder::InsertionGuard guardBody(outerLoopB);
+        outerLoopB.setInsertionPointToStart(outerLoopBodyOp.getBody());
+        ldsToRegisterCopy(loc, outerLoopB, ilkb, sourceBase,
+                          outerLoopBodyOp.getInductionVar(), MN,
+                          innerLoopK.getInductionVar(), KPerThreadConstantOp,
+                          mnPerMfmaGroup, mnWaves, ldsBufferElemType, dataType,
+                          ldsOrig, regDest);
+      }
+    };
 
     // load A from LDS into registers
     // for(index_t m_i = 0; m_i < mRepeats; ++m_i)
@@ -474,8 +476,8 @@ struct BlockwiseGemmAccelRewritePattern
     auto olmb = ConversionPatternRewriter::atBlockBegin(outerLoopM.getBody(),
                                                         b.getListener());
     ldsToRegisterCopyKdim(olmb, outerLoopM, sourceOffsetA, MConstantOp,
-                          mPerAccelConstantOp, mWavesConstantOp, bufferElemTypeA, dataTypeA,
-                          op.getMatrixA(), bufferA);
+                          mPerAccelConstantOp, mWavesConstantOp,
+                          bufferElemTypeA, dataTypeA, op.getMatrixA(), bufferA);
 
     // load B from LDS into registers
     // for(index_t n_i = 0; n_i < mRepeats; ++n_i)
@@ -485,8 +487,8 @@ struct BlockwiseGemmAccelRewritePattern
     auto olnb = ConversionPatternRewriter::atBlockBegin(outerLoopN.getBody(),
                                                         olmb.getListener());
     ldsToRegisterCopyKdim(olnb, outerLoopN, sourceOffsetB, NConstantOp,
-                          nPerAccelConstantOp, nWavesConstantOp, bufferElemTypeB, dataTypeB,
-                          op.getMatrixB(), bufferB);
+                          nPerAccelConstantOp, nWavesConstantOp,
+                          bufferElemTypeB, dataTypeB, op.getMatrixB(), bufferB);
 
     b.eraseOp(op);
     olnb.create<AccelGemmOp>(loc, outerLoopM.getInductionVar(),

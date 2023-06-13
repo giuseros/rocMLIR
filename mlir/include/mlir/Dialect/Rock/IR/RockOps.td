@@ -363,8 +363,6 @@ def Rock_GridwiseGemmAccelOp :
                    StoreMethodAttr:$storeMethod,
                    I32Attr:$blockSize,
                    I32Attr:$gridSize,
-                   Rock_GemmBlockLayoutAttr:$blockLayout,
-                   Rock_GemmGridLayoutAttr:$gridLayout,
                    RockAccelTuningParamAttrInterface:$params)> {
   let summary = "Gridwise GEMM accelerated version";
   let description = [{
