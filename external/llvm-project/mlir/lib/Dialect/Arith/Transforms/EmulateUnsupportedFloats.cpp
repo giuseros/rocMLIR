@@ -17,7 +17,7 @@
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Location.h"
 #include "mlir/IR/PatternMatch.h"
-#include "mlir/IR/SubElementInterfaces.h"
+#include "mlir/IR/AttrTypeSubElements.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "llvm/ADT/STLExtras.h"
 #include <optional>

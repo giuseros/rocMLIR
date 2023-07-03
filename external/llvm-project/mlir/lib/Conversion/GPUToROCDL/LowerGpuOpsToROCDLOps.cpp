@@ -13,6 +13,9 @@
 
 #include "mlir/Conversion/ControlFlowToLLVM/ControlFlowToLLVM.h"
 #include "mlir/Conversion/GPUToROCDL/GPUToROCDLPass.h"
+#include "mlir/Pass/Pass.h"
+#include "mlir/Pass/PassManager.h"
+#include "mlir/Transforms/Passes.h"
 
 #include "mlir/Conversion/AMDGPUToROCDL/AMDGPUToROCDL.h"
 #include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
@@ -136,34 +139,6 @@ struct LowerGpuOpsToROCDLOpsPass
       (void)applyPatternsAndFoldGreedily(m, std::move(patterns));
     }
 
-    // Apply memory space lowering. The target uses 3 for workgroup memory and 5
-    // for private memory.
-    {
-      RewritePatternSet patterns(ctx);
-      TypeConverter typeConverter;
-      typeConverter.addConversion([](Type t) { return t; });
-      gpu::populateMemorySpaceAttributeTypeConversions(
-          typeConverter, [](gpu::AddressSpace space) {
-            switch (space) {
-            case gpu::AddressSpace::Global:
-              return 1;
-            case gpu::AddressSpace::Workgroup:
-              return 3;
-            case gpu::AddressSpace::Private:
-              return 5;
-            }
-            llvm_unreachable("unknown address space enum value");
-            return 0;
-          });
-      ConversionTarget target(getContext());
-      gpu::populateLowerMemorySpaceOpLegality(target);
-      gpu::populateMemorySpaceLoweringPatterns(typeConverter, patterns);
-      if (failed(applyFullConversion(m, target, std::move(patterns))))
-        return signalPassFailure();
-    }
-
-    RewritePatternSet patterns(ctx);
-    RewritePatternSet bf16fixupPatterns(ctx);
     LLVMTypeConverter converter(ctx, options);
     populateGpuMemorySpaceAttributeConversions(
         converter, [](gpu::AddressSpace space) {
@@ -181,9 +156,9 @@ struct LowerGpuOpsToROCDLOpsPass
 
     RewritePatternSet llvmPatterns(ctx);
 
-    vector::populateVectorMaskMaterializationPatterns(llvmPatterns, true);
-    vector::populateVectorTransferLoweringPatterns(llvmPatterns);
-    mlir::arith::populateArithToLLVMConversionPatterns(converter, llvmPatterns);
+    // vector::populateVectorMaskMaterializationPatterns(llvmPatterns, true);
+    // vector::populateVectorTransferLoweringPatterns(llvmPatterns);
+    // mlir::arith::populateArithToLLVMConversionPatterns(converter, llvmPatterns);
     mlir::arith::populateArithToLLVMConversionPatterns(converter, llvmPatterns);
     populateAMDGPUToROCDLConversionPatterns(converter, llvmPatterns,
                                             *maybeChipset);

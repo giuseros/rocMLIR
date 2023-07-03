@@ -131,7 +131,7 @@ struct LaunchOpInterface
         opOperand.getOperandNumber());
   }
 
-  SmallVector<OpResult> getAliasingOpResult(Operation *op, OpOperand &opOperand,
+  AliasingOpResultList getAliasingOpResults(Operation *op, OpOperand &opOperand,
                                             const AnalysisState &state) const {
     mlir::CallOpInterface callOp(op);
     FuncOp funcOp = getCalledFunction(callOp);
@@ -139,49 +139,29 @@ struct LaunchOpInterface
     if (getFuncOpAnalysisState(state, funcOp) !=
         FuncOpAnalysisState::Analyzed) {
       // FuncOp not analyzed yet. Any OpResult may be aliasing.
-      SmallVector<OpResult> result;
-      for (OpResult opResult : op->getOpResults())
-        if (opResult.getType().isa<TensorType>())
-          result.push_back(opResult);
-      return result;
+      return bufferization::detail::unknownGetAliasingOpResults(opOperand);
     }
 
-    // Get aliasing results from state.
     const FuncAnalysisState &funcState = getFuncAnalysisState(state);
     auto aliasingReturnVals =
         funcState.aliasingReturnVals.lookup(funcOp).lookup(
             opOperand.getOperandNumber());
-    SmallVector<OpResult> result;
-    for (int64_t resultIdx : aliasingReturnVals)
-      result.push_back(
-          callOp->getOpResult(getCallOperandIdx(callOp, resultIdx)));
-    return result;
-  }
 
-  SmallVector<OpOperand *>
-  getAliasingOpOperand(Operation *op, OpResult opResult,
-                       const AnalysisState &state) const {
-    mlir::CallOpInterface callOp(op);
-    FuncOp funcOp = getCalledFunction(callOp);
-    assert(funcOp && "expected CallOp to a FuncOp");
-    if (getFuncOpAnalysisState(state, funcOp) !=
-        FuncOpAnalysisState::Analyzed) {
-      // FuncOp not analyzed yet. Any OpOperand may be aliasing.
-      SmallVector<OpOperand *> result;
-      for (OpOperand &opOperand : op->getOpOperands())
-        if (opOperand.get().getType().isa<TensorType>())
-          result.push_back(&opOperand);
-      return result;
+    // Check if the aliasing OpResult is equivalent to the OpOperand.
+    std::optional<int64_t> equivalent = {};
+    if (aliasingReturnVals.size() == 1) {
+      equivalent = getEquivalentFuncArgIdx(funcOp, funcState,
+                                           aliasingReturnVals.front());
+      assert((!equivalent.has_value() ||
+              *equivalent == opOperand.getOperandNumber()) &&
+             "inconsistent analysis state");
     }
-
-    // Get aliasing bbArgs from state.
-    const FuncAnalysisState &funcState = getFuncAnalysisState(state);
-    auto aliasingFuncArgs = funcState.aliasingFuncArgs.lookup(funcOp).lookup(
-        opResult.getResultNumber());
-    SmallVector<OpOperand *> result;
-    for (int64_t bbArgIdx : aliasingFuncArgs)
-      result.push_back(
-          &callOp->getOpOperand(getCallOperandIdx(callOp, bbArgIdx)));
+    AliasingOpResultList result;
+    for (int64_t resultIdx : aliasingReturnVals)
+      result.addAlias({callOp->getOpResult(resultIdx),
+                       equivalent.has_value() ? BufferRelation::Equivalent
+                                              : BufferRelation::Unknown,
+                       /*isDefinite=*/equivalent.has_value()});
     return result;
   }
 
@@ -193,24 +173,16 @@ struct LaunchOpInterface
     if (getFuncOpAnalysisState(state, funcOp) !=
         FuncOpAnalysisState::Analyzed) {
       // Function not analyzed yet. The conservative answer is "None".
-      return BufferRelation::None;
+      return BufferRelation::Unknown;
     }
 
     const FuncAnalysisState &funcState = getFuncAnalysisState(state);
     std::optional<int64_t> maybeEquiv =
         getEquivalentFuncArgIdx(funcOp, funcState, opResult.getResultNumber());
     if (maybeEquiv) {
-#ifndef NDEBUG
-      SmallVector<OpOperand *> aliasingOpOperands =
-          getAliasingOpOperand(op, opResult, state);
-      assert(aliasingOpOperands.size() == 1 &&
-             "expected exactly 1 aliasing OpOperand");
-      assert(aliasingOpOperands.front()->getOperandNumber() == *maybeEquiv &&
-             "inconsistent analysis state");
-#endif
       return BufferRelation::Equivalent;
     }
-    return BufferRelation::None;
+    return BufferRelation::Unknown;
   }
 
   /// All function arguments are writable. It is the responsibility of the

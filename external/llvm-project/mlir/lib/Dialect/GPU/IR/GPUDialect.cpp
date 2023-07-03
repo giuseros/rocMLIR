@@ -1374,14 +1374,6 @@ static void setAttributionAttr(GPUFuncOp op, unsigned index, StringAttr name,
   setAttributionAttrs(op, index, newDict, attrsName);
 }
 
-void GPUFuncOp::setWorkgroupAttributionAttr(unsigned index, StringAttr name,
-                                            Attribute value) {
-  assert(index < getNumWorkgroupAttributions() &&
-         "index must map to a workgroup attribution");
-  setAttributionAttr(*this, index, name, value,
-                     getWorkgroupAttribAttrsAttrName());
-}
-
 void GPUFuncOp::setPrivateAttributionAttr(unsigned index, StringAttr name,
                                           Attribute value) {
   assert(index < getNumPrivateAttributions() &&
@@ -1389,10 +1381,6 @@ void GPUFuncOp::setPrivateAttributionAttr(unsigned index, StringAttr name,
   setAttributionAttr(*this, index, name, value,
                      getPrivateAttribAttrsAttrName());
 }
-
-LogicalResult GPUFuncOp::verifyType() {
-  if (isKernel() && getFunctionType().getNumResults() != 0)
-    return emitOpError() << "expected void return type for kernel function";
 
 void GPUFuncOp::setWorkgroupAttributionAttr(unsigned index, StringAttr name,
                                             Attribute value) {
@@ -1402,13 +1390,6 @@ void GPUFuncOp::setWorkgroupAttributionAttr(unsigned index, StringAttr name,
                      getWorkgroupAttribAttrsAttrName());
 }
 
-void GPUFuncOp::setPrivateAttributionAttr(unsigned index, StringAttr name,
-                                          Attribute value) {
-  assert(index < getNumPrivateAttributions() &&
-         "index must map to a private attribution");
-  setAttributionAttr(*this, index, name, value,
-                     getPrivateAttribAttrsAttrName());
-}
 
 LogicalResult GPUFuncOp::verifyType() {
   if (isKernel() && getFunctionType().getNumResults() != 0)

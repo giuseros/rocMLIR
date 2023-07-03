@@ -56,7 +56,7 @@ struct SimpleOperationInfo : public llvm::DenseMapInfo<Operation *> {
     return OperationEquivalence::isEquivalentTo(
         const_cast<Operation *>(lhsC), const_cast<Operation *>(rhsC),
         /*mapOperands=*/OperationEquivalence::exactValueMatch,
-        /*mapResults=*/OperationEquivalence::ignoreValueEquivalence,
+        /*mapResults=*/nullptr,
         OperationEquivalence::IgnoreLocations);
   }
 };

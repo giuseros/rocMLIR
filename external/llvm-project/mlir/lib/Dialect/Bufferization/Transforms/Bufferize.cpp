@@ -454,6 +454,7 @@ LogicalResult bufferization::bufferizeOp(Operation *op,
   op->walk([&](func::FuncOp funcOp) {
     if (hasTensorSemantics(funcOp))
       worklist.push_back(funcOp);
+
   });
   op->walk<WalkOrder::PostOrder>([&](Operation *op) {
     if (hasTensorSemantics(op) && !isa<func::FuncOp>(op))

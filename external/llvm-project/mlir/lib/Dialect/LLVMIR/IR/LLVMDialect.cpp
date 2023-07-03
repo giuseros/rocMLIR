@@ -3325,46 +3325,39 @@ Operation *LLVMDialect::materializeConstant(OpBuilder &builder, Attribute value,
 // Utility functions.
 //===----------------------------------------------------------------------===//
 
-Value mlir::LLVM::createGlobalString(Location loc, OpBuilder &builder,
-                                     StringRef name, StringRef value,
-                                     LLVM::Linkage linkage,
-                                     bool useOpaquePointers) {
-  assert(builder.getInsertionBlock() &&
-         builder.getInsertionBlock()->getParentOp() &&
-         "expected builder to point to a block constrained in an op");
-  auto module =
-      builder.getInsertionBlock()->getParentOp()->getParentOfType<ModuleOp>();
-  assert(module && "builder points to an op outside of a module");
-  MLIRContext *ctx = builder.getContext();
+  Value mlir::LLVM::createGlobalString(Location loc, OpBuilder &builder,
+                                      StringRef name, StringRef value,
+                                      LLVM::Linkage linkage,
+                                      bool useOpaquePointers) {
+   assert(builder.getInsertionBlock() &&
+          builder.getInsertionBlock()->getParentOp() &&
+          "expected builder to point to a block constrained in an op");
+   auto module =
+       builder.getInsertionBlock()->getParentOp()->getParentOfType<ModuleOp>();
+   assert(module && "builder points to an op outside of a module");
 
-  SmallString<64> uniqueName(name);
-  Twine nameU(name, "_");
+   // Create the global at the entry of the module.
+   OpBuilder moduleBuilder(module.getBodyRegion(), builder.getListener());
+   MLIRContext *ctx = builder.getContext();
+   auto type = LLVM::LLVMArrayType::get(IntegerType::get(ctx, 8), value.size());
+   auto global = moduleBuilder.create<LLVM::GlobalOp>(
+       loc, type, /*isConstant=*/true, linkage, name,
+       builder.getStringAttr(value), /*alignment=*/0);
 
-  // Create the global at the entry of the module.
-  // Uniquify if necessary or return found equivalent.
-  LLVM::GlobalOp global = module.lookupSymbol<LLVM::GlobalOp>(uniqueName);
-  uint32_t i = 0;
-  while (global) {
-    auto globalVal = global.getValueOrNull().dyn_cast<StringAttr>();
-    if (global.getConstant() && globalVal && globalVal == value)
-      break;
-    // uniquify the name
-    uniqueName = (nameU + Twine(++i)).str();
-    global = module.lookupSymbol<LLVM::GlobalOp>(uniqueName);
-  }
-  if (!global) {
-    OpBuilder moduleBuilder(module.getBodyRegion(), builder.getListener());
-    auto type =
-        LLVM::LLVMArrayType::get(IntegerType::get(ctx, 8), value.size());
-    global = moduleBuilder.create<LLVM::GlobalOp>(
-        loc, type, /*isConstant=*/true, linkage, uniqueName,
-        builder.getStringAttr(value), /*alignment=*/0);
-  }
-  // Get the pointer to the first character in the global string.
-  Value globalPtr = builder.create<LLVM::AddressOfOp>(loc, resultType,
-                                                      global.getSymNameAttr());
-  return builder.create<LLVM::GEPOp>(loc, charPtr, type, globalPtr,
-                                     ArrayRef<GEPArg>{0, 0});
+   LLVMPointerType resultType;
+   LLVMPointerType charPtr;
+   if (!useOpaquePointers) {
+     resultType = LLVMPointerType::get(type);
+     charPtr = LLVMPointerType::get(IntegerType::get(ctx, 8));
+   } else {
+     resultType = charPtr = LLVMPointerType::get(ctx);
+   }
+
+   // Get the pointer to the first character in the global string.
+   Value globalPtr = builder.create<LLVM::AddressOfOp>(loc, resultType,
+                                                       global.getSymNameAttr());
+   return builder.create<LLVM::GEPOp>(loc, charPtr, type, globalPtr,
+                                      ArrayRef<GEPArg>{0, 0});
 }
 
 bool mlir::LLVM::satisfiesLLVMModule(Operation *op) {

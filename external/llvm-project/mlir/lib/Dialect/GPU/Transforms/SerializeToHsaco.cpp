@@ -60,6 +60,8 @@
 #include <mutex>
 #include <optional>
 
+LLD_HAS_DRIVER(elf)
+
 using namespace mlir;
 
 namespace {
@@ -461,7 +463,7 @@ void mlir::registerGpuSerializeToHsacoPass() {
     LLVMInitializeAMDGPUTargetMC();
 
     return std::make_unique<SerializeToHsacoPass>("amdgcn-amd-amdhsa", "", "",
-                                                  2);
+                                                  1);
   });
 }
 
@@ -472,7 +474,7 @@ std::unique_ptr<Pass> mlir::createGpuSerializeToHsacoPass(StringRef triple,
                                                           StringRef features,
                                                           int optLevel) {
   return std::make_unique<SerializeToHsacoPass>(triple, arch, features,
-                                                optLevel);
+                                                1);
 }
 
 #else  // MLIR_GPU_TO_HSACO_PASS_ENABLE

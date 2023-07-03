@@ -41,5 +41,5 @@ int main(int argc, char **argv) {
   registerRocMLIRDialects(registry);
   return mlir::asMainReturnCode(
       mlir::MlirOptMain(argc, argv, "MLIR+Rock modular optimizer driver\n",
-                        registry, /*preloadDialectsInContext=*/false));
+                        registry));
 }

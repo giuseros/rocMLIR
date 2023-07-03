@@ -12,7 +12,6 @@ set(LLVM_LINK_COMPONENTS
   AsmParser
   )
 
-
 set(LIBS
   ${rocmlir_dialect_libs}
   ${rocmlir_conversion_libs}
@@ -22,6 +21,8 @@ set(LIBS
   MLIRMHALTransforms
   MLIRMHALPipeline
   )
+  message("LIBSSSSSSSSSSSSS")
+message(${LIBS})
 
 # Exclude from libMLIR.so because this has static options intended for
 # opt-like tools only.

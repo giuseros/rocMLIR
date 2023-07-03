@@ -135,7 +135,7 @@ parsePipeline(StringRef pipeline, llvm::SmallDenseSet<StringRef> &pipelineSet,
 static LogicalResult
 runKernelPipeline(StringRef arch, ModuleOp kmod, bool isHighLevel,
                   llvm::SmallDenseSet<StringRef> &kernelPipelineSet) {
-  PassManager pm(kmod.getContext(), PassManager::Nesting::Implicit);
+  PassManager pm(kmod->getName(), PassManager::Nesting::Implicit);
   applyPassManagerCLOptions(pm);
 
   bool needArch = kernelPipelineSet.contains("rocdl") ||
@@ -261,7 +261,7 @@ static LogicalResult runMLIRPasses(ModuleOp &module,
 
   // Run partitioning pipeline.
   if (hostPipelineSet.contains("partition")) {
-    PassManager pm(module.getContext(), PassManager::Nesting::Implicit);
+    PassManager pm(module->getName(), PassManager::Nesting::Implicit);
     applyPassManagerCLOptions(pm);
 
     mhal::GraphOptions opts;
@@ -311,7 +311,7 @@ static LogicalResult runMLIRPasses(ModuleOp &module,
     if (failed(kernelResult))
       return kernelResult;
   } else {
-    PassManager pm(module.getContext(), PassManager::Nesting::Implicit);
+    PassManager pm(module->getName(), PassManager::Nesting::Implicit);
     applyPassManagerCLOptions(pm);
 
     auto errorHandler = [&](const Twine &msg) {
@@ -330,7 +330,7 @@ static LogicalResult runMLIRPasses(ModuleOp &module,
 
   // Run Bufferization on the top module
   if (isHighLevel && hasKernels) {
-    PassManager pm(module.getContext(), PassManager::Nesting::Implicit);
+    PassManager pm(module->getName(), PassManager::Nesting::Implicit);
     applyPassManagerCLOptions(pm);
     rock::BufferizeOptions opts;
     opts.disableRock = true;
@@ -360,7 +360,7 @@ static LogicalResult runMLIRPasses(ModuleOp &module,
                       "within rocmlir-driver\n";
       return failure();
     }
-    PassManager pm(module.getContext(), PassManager::Nesting::Implicit);
+    PassManager pm(module->getName(), PassManager::Nesting::Implicit);
     applyPassManagerCLOptions(pm);
     mhal::RunnerOptions runnerOptions;
     runnerOptions.barePtrMemrefs = barePointers.getValue();
@@ -387,7 +387,7 @@ int main(int argc, char **argv) {
   registerRocMLIRDialects(registry);
   MLIRContext context(registry);
   context.loadDialect<mhal::MHALDialect, rock::RockDialect, func::FuncDialect,
-                      scf::SCFDialect, AffineDialect, memref::MemRefDialect,
+                      scf::SCFDialect, affine::AffineDialect, memref::MemRefDialect,
                       math::MathDialect, arith::ArithDialect, gpu::GPUDialect,
                       bufferization::BufferizationDialect, mhal::MHALDialect>();
   mlir::registerRocMLIRPasses();
