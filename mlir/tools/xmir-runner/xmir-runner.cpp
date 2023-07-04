@@ -83,8 +83,8 @@ static LogicalResult runMLIRPasses(Operation *m, JitRunnerOptions &options) {
 
   // Host Compiler/Scheduler Pipeline
   PassManager pm(m->getContext());
-  applyPassManagerCLOptions(pm);
-
+  if (failed(applyPassManagerCLOptions(pm)))
+    return failure();
   mhal::RunnerOptions opts;
   opts.targetTypes = targetTypes;
   opts.targetArchs = targetArchs;

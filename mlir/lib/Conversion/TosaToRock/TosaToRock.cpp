@@ -33,6 +33,8 @@ using namespace mlir;
 namespace {
 
 static bool isZeroAttribute(Attribute value) {
+  if (auto intValue = value.dyn_cast<IntegerAttr>())
+    return intValue.getValue().isZero();
   if (auto fpValue = value.dyn_cast<FloatAttr>())
     return fpValue.getValue().isZero();
   if (auto splatValue = value.dyn_cast<SplatElementsAttr>())

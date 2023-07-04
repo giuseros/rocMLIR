@@ -21,8 +21,6 @@ set(LIBS
   MLIRMHALTransforms
   MLIRMHALPipeline
   )
-  message("LIBSSSSSSSSSSSSS")
-message(${LIBS})
 
 # Exclude from libMLIR.so because this has static options intended for
 # opt-like tools only.

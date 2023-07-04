@@ -3335,15 +3335,32 @@ Operation *LLVMDialect::materializeConstant(OpBuilder &builder, Attribute value,
    auto module =
        builder.getInsertionBlock()->getParentOp()->getParentOfType<ModuleOp>();
    assert(module && "builder points to an op outside of a module");
+   MLIRContext *ctx = builder.getContext();
+
+   SmallString<64> uniqueName(name);
+   Twine nameU(name, "_");
 
    // Create the global at the entry of the module.
-   OpBuilder moduleBuilder(module.getBodyRegion(), builder.getListener());
-   MLIRContext *ctx = builder.getContext();
+   // Uniquify if necessary or return found equivalent.
+   LLVM::GlobalOp global = module.lookupSymbol<LLVM::GlobalOp>(uniqueName);
+   uint32_t i = 0;
+   while (global) {
+     auto globalVal = global.getValueOrNull().dyn_cast<StringAttr>();
+     if (global.getConstant() && globalVal && globalVal == value)
+       break;
+     // uniquify the name
+     uniqueName = (nameU + Twine(++i)).str();
+     global = module.lookupSymbol<LLVM::GlobalOp>(uniqueName);
+   }
    auto type = LLVM::LLVMArrayType::get(IntegerType::get(ctx, 8), value.size());
-   auto global = moduleBuilder.create<LLVM::GlobalOp>(
-       loc, type, /*isConstant=*/true, linkage, name,
-       builder.getStringAttr(value), /*alignment=*/0);
+   if (!global) {
+     // Create the global at the entry of the module.
+     OpBuilder moduleBuilder(module.getBodyRegion(), builder.getListener());
+     global = moduleBuilder.create<LLVM::GlobalOp>(
+         loc, type, /*isConstant=*/true, linkage, name,
+         builder.getStringAttr(value), /*alignment=*/0);
 
+   }
    LLVMPointerType resultType;
    LLVMPointerType charPtr;
    if (!useOpaquePointers) {
@@ -3352,7 +3369,6 @@ Operation *LLVMDialect::materializeConstant(OpBuilder &builder, Attribute value,
    } else {
      resultType = charPtr = LLVMPointerType::get(ctx);
    }
-
    // Get the pointer to the first character in the global string.
    Value globalPtr = builder.create<LLVM::AddressOfOp>(loc, resultType,
                                                        global.getSymNameAttr());

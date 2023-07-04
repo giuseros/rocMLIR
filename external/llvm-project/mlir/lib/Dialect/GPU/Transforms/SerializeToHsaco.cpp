@@ -463,7 +463,7 @@ void mlir::registerGpuSerializeToHsacoPass() {
     LLVMInitializeAMDGPUTargetMC();
 
     return std::make_unique<SerializeToHsacoPass>("amdgcn-amd-amdhsa", "", "",
-                                                  1);
+                                                  2);
   });
 }
 
@@ -474,7 +474,7 @@ std::unique_ptr<Pass> mlir::createGpuSerializeToHsacoPass(StringRef triple,
                                                           StringRef features,
                                                           int optLevel) {
   return std::make_unique<SerializeToHsacoPass>(triple, arch, features,
-                                                1);
+                                                optLevel);
 }
 
 #else  // MLIR_GPU_TO_HSACO_PASS_ENABLE

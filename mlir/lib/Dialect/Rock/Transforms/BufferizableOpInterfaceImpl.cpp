@@ -56,9 +56,10 @@ struct GemmLikeInterface
     auto cop = mlir::cast<Concrete>(op);
     if (&opOperand == cop.getOutArgument()){
       SmallVector<AliasingOpResult, 4> opResults;
+      AliasingOpResultList result;
       for (auto opResult : op->getOpResults())
-        opResults.push_back({opResult, BufferRelation::Equivalent});
-      return AliasingOpResultList(std::move(opResults));
+        result.addAlias({opResult, BufferRelation::Equivalent});
+      return result;
     }
     return {};
   }
@@ -114,10 +115,10 @@ struct TransformOpInterface
 
   AliasingOpResultList getAliasingOpResults(Operation *op, OpOperand &opOperand,
                                             const AnalysisState &state) const {
-      SmallVector<AliasingOpResult, 4> opResults;
+      AliasingOpResultList result;
       for (auto opResult : op->getOpResults())
-        opResults.push_back({opResult, BufferRelation::Equivalent});
-      return AliasingOpResultList(std::move(opResults));
+        result.addAlias({opResult, BufferRelation::Equivalent});
+      return result;
   }
 
   // The output argument is equal to the returned value
@@ -167,10 +168,10 @@ struct TensorUntransformCastOpInterface
     auto castOp = mlir::cast<rock::TensorUntransformCastOp>(op);
     Value operand = opOperand.get();
     if (operand == castOp.getTransformedResult()){
-      SmallVector<AliasingOpResult, 4> opResults;
+      AliasingOpResultList result;
       for (auto opResult : op->getOpResults())
-        opResults.push_back({opResult, BufferRelation::Equivalent});
-      return AliasingOpResultList(std::move(opResults));
+        result.addAlias({opResult, BufferRelation::Equivalent});
+      return result;
     }
     return {};
   }

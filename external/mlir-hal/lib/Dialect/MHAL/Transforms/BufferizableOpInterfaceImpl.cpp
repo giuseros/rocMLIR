@@ -48,20 +48,6 @@ getEquivalentFuncArgIdx(FuncOp funcOp, const FuncAnalysisState &state,
   return retValIt->getSecond();
 }
 
-/// Return the actual call operand index corresponding to the func operand.
-static unsigned getCallOperandIdx(CallOpInterface callOp, unsigned funcIdx) {
-  auto operands = callOp.getArgOperands();
-  if (operands.size() != callOp->getOperands().size()) {
-    // Search for the value
-    for (const auto &it : llvm::enumerate(callOp->getOperands())) {
-      if (it.value() == operands[funcIdx])
-        return it.index();
-    }
-    assert(0 && "not found!?");
-  }
-  return funcIdx;
-}
-
 /// Return the FuncOp called by `callOp`.
 static FuncOp getCalledFunction(CallOpInterface callOp) {
   SymbolRefAttr sym = callOp.getCallableForCallee().dyn_cast<SymbolRefAttr>();
@@ -163,26 +149,6 @@ struct LaunchOpInterface
                                               : BufferRelation::Unknown,
                        /*isDefinite=*/equivalent.has_value()});
     return result;
-  }
-
-  BufferRelation bufferRelation(Operation *op, OpResult opResult,
-                                const AnalysisState &state) const {
-    func::CallOp callOp = cast<func::CallOp>(op);
-    FuncOp funcOp = getCalledFunction(callOp);
-    assert(funcOp && "expected CallOp to a FuncOp");
-    if (getFuncOpAnalysisState(state, funcOp) !=
-        FuncOpAnalysisState::Analyzed) {
-      // Function not analyzed yet. The conservative answer is "None".
-      return BufferRelation::Unknown;
-    }
-
-    const FuncAnalysisState &funcState = getFuncAnalysisState(state);
-    std::optional<int64_t> maybeEquiv =
-        getEquivalentFuncArgIdx(funcOp, funcState, opResult.getResultNumber());
-    if (maybeEquiv) {
-      return BufferRelation::Equivalent;
-    }
-    return BufferRelation::Unknown;
   }
 
   /// All function arguments are writable. It is the responsibility of the

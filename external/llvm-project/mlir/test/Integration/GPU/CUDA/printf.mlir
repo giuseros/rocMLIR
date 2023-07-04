@@ -1,3 +1,4 @@
+; XFAIL
 // RUN: mlir-opt %s \
 // RUN: | mlir-opt -pass-pipeline='builtin.module(gpu.module(strip-debuginfo,convert-gpu-to-nvvm,gpu-to-cubin))' \
 // RUN: | mlir-opt -gpu-to-llvm \

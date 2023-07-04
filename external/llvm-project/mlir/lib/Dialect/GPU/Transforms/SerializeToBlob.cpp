@@ -111,7 +111,7 @@ gpu::SerializeToBlobPass::optimizeLlvm(llvm::Module &llvmModule,
   targetMachine.setOptLevel(static_cast<llvm::CodeGenOpt::Level>(optLevel));
 
   auto transformer =
-      makeOptimizingTransformer(0, /*sizeLevel=*/0, &targetMachine);
+      makeOptimizingTransformer(optLevel, /*sizeLevel=*/0, &targetMachine);
   auto error = transformer(&llvmModule);
   if (error) {
     InFlightDiagnostic mlirError = getOperation()->emitError();

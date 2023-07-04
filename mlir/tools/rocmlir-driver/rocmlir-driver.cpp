@@ -136,8 +136,8 @@ static LogicalResult
 runKernelPipeline(StringRef arch, ModuleOp kmod, bool isHighLevel,
                   llvm::SmallDenseSet<StringRef> &kernelPipelineSet) {
   PassManager pm(kmod->getName(), PassManager::Nesting::Implicit);
-  applyPassManagerCLOptions(pm);
-
+  if (failed(applyPassManagerCLOptions(pm)))
+    return failure();
   bool needArch = kernelPipelineSet.contains("rocdl") ||
                   kernelPipelineSet.contains("binary");
   RocmDeviceName devName;
@@ -262,8 +262,8 @@ static LogicalResult runMLIRPasses(ModuleOp &module,
   // Run partitioning pipeline.
   if (hostPipelineSet.contains("partition")) {
     PassManager pm(module->getName(), PassManager::Nesting::Implicit);
-    applyPassManagerCLOptions(pm);
-
+    if (failed(applyPassManagerCLOptions(pm)))
+      return failure();
     mhal::GraphOptions opts;
     opts.targets = targetList;
     mhal::buildGraphPipeline(pm, opts);
@@ -312,8 +312,8 @@ static LogicalResult runMLIRPasses(ModuleOp &module,
       return kernelResult;
   } else {
     PassManager pm(module->getName(), PassManager::Nesting::Implicit);
-    applyPassManagerCLOptions(pm);
-
+    if (failed(applyPassManagerCLOptions(pm)))
+      return failure();
     auto errorHandler = [&](const Twine &msg) {
       emitError(UnknownLoc::get(module.getContext())) << msg;
       return failure();
@@ -331,7 +331,8 @@ static LogicalResult runMLIRPasses(ModuleOp &module,
   // Run Bufferization on the top module
   if (isHighLevel && hasKernels) {
     PassManager pm(module->getName(), PassManager::Nesting::Implicit);
-    applyPassManagerCLOptions(pm);
+    if (failed(applyPassManagerCLOptions(pm)))
+      return failure();
     rock::BufferizeOptions opts;
     opts.disableRock = true;
     rock::buildBufferizePipeline(pm, opts);
@@ -344,7 +345,8 @@ static LogicalResult runMLIRPasses(ModuleOp &module,
   // Run MHAL generation on the top module
   if (hostPipelineSet.contains("mhal")) {
     PassManager pm(module.getContext());
-    applyPassManagerCLOptions(pm);
+    if (failed(applyPassManagerCLOptions(pm)))
+      return failure();
     mhal::buildPackagePipeline(pm);
     if (failed(pm.run(module))) {
       return failure();
@@ -361,7 +363,8 @@ static LogicalResult runMLIRPasses(ModuleOp &module,
       return failure();
     }
     PassManager pm(module->getName(), PassManager::Nesting::Implicit);
-    applyPassManagerCLOptions(pm);
+    if (failed(applyPassManagerCLOptions(pm)))
+      return failure();
     mhal::RunnerOptions runnerOptions;
     runnerOptions.barePtrMemrefs = barePointers.getValue();
     runnerOptions.enableCoroutines = hostAsyncCoroutines.getValue();

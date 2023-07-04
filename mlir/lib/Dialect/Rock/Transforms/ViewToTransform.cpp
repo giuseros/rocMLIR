@@ -77,7 +77,6 @@ struct ExpandShapeRewritePattern
 
     rock::TransformMapAttr expandAttr =
         rock::transformExpandShape(b, loc, inpShape, outShape, reassocs);
-    expandAttr.dump();
     if (!expandAttr)
       return b.notifyMatchFailure(
           loc, "could not translate tensor expansion into rock transform");

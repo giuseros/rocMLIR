@@ -24,6 +24,7 @@
 #include "mlir/Conversion/LLVMCommon/LoweringOptions.h"
 #include "mlir/Conversion/LLVMCommon/Pattern.h"
 #include "mlir/Conversion/LLVMCommon/TypeConverter.h"
+#include "mlir/Conversion/MathToLLVM/MathToLLVM.h"
 #include "mlir/Conversion/MemRefToLLVM/MemRefToLLVM.h"
 #include "mlir/Conversion/VectorToLLVM/ConvertVectorToLLVM.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlow.h"
@@ -160,6 +161,7 @@ struct LowerGpuOpsToROCDLOpsPass
     // vector::populateVectorTransferLoweringPatterns(llvmPatterns);
     // mlir::arith::populateArithToLLVMConversionPatterns(converter, llvmPatterns);
     mlir::arith::populateArithToLLVMConversionPatterns(converter, llvmPatterns);
+    mlir::populateMathToLLVMConversionPatterns(converter, llvmPatterns);
     populateAMDGPUToROCDLConversionPatterns(converter, llvmPatterns,
                                             *maybeChipset);
     populateVectorToLLVMConversionPatterns(converter, llvmPatterns);
