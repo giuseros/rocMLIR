@@ -192,7 +192,7 @@ createTopSplitTMBuilder(PatternRewriter &b, Location loc, int64_t numElements,
 }
 
 ArrayAttr MfmaEmitter::computeOutputTransforms(
-    PatternRewriter &b, Location loc, int64_t mLen, int64_t nLen,
+    PatternRewriter &b, Location loc, int64_t mLen, int64_t nLen, bool isKContiguousDimA, bool isKContiguousDimB, int64_t computeMPerThread, int64_t computeNPerThread,
     std::optional<int64_t> blockSize,
     std::optional<ArrayRef<int64_t>> bidGridLengths) {
 
@@ -332,6 +332,7 @@ ArrayAttr MfmaEmitter::computeOutputTransforms(
           {dimSizes[1], dimSizes[3], dimSizes[4], dimSizes[6]});
     }
   }
+
   {
     SmallVector<StringRef, 5> dimNamesN{/*0=*/"n_block",
                                         /*1=*/"n_i",
@@ -355,9 +356,51 @@ ArrayAttr MfmaEmitter::computeOutputTransforms(
                         {dimSizes[1], dimSizes[3]});
     }
   }
+
+
   TransformMapAttr toMatrixCAttr = toMatrixC.get();
+  auto splitAgain= TopDownTMBuilder::below(toMatrixC, toMatrixCAttr);
+  {
+    splitAgain.passThrough("gemmG");
+    unsigned int idx = 1;
+    if (isKContiguousDimA){
+      splitAgain.passThrough({"gemmM"}, {idx}, {"gemmM"});
+      idx += 1;
+    } else {
+      splitAgain.merge({"m_block", "m_iter", "m_tid"}, {idx, idx+1, idx+2}, "gemmM", {(*bidGridLengths)[1], computeMPerThread, mPerBlock/computeMPerThread});
+      idx += 3;
+    }
+
+    if (isKContiguousDimB)
+      splitAgain.passThrough({"gemmN"}, {idx}, {"gemmN"});
+    else{
+      llvm::errs()<<(*bidGridLengths)[2]<<"\n";
+      llvm::errs()<<computeNPerThread<<"\n";
+      llvm::errs()<<nPerBlock/computeNPerThread<<"\n";
+      splitAgain.merge({"n_block", "n_iter", "n_tid"}, {idx, idx+1, idx+2}, "gemmN", {(*bidGridLengths)[2], 2, 64 });
+    }
+  }
+
+  TransformMapAttr splitAgainAttr = splitAgain.get();
+  splitAgainAttr.dump();
+  auto swapBack = TopDownTMBuilder::below(splitAgain, splitAgainAttr);
+  {
+    swapBack.passThrough("gemmG");
+    if (isKContiguousDimA)
+      swapBack.passThrough("gemmM");
+    else
+      swapBack.unmerge("gemmM", 1, {"m_block", "m_tid", "m_iter"}, {(*bidGridLengths)[1], mPerBlock/computeMPerThread, computeMPerThread});
+
+    if (isKContiguousDimB)
+      swapBack.passThrough("gemmN");
+    else
+      swapBack.unmerge("gemmN", 2, {"n_block", "n_tid", "n_iter"}, {(*bidGridLengths)[2], 64, 2});
+  }
+  TransformMapAttr swapBackAttr = swapBack.get();
+  swapBackAttr.dump();
+
   ArrayAttr idToMatrixCMaps =
-      b.getArrayAttr({splitMemoryCoordsAttr, toRowsAndColsAttr, toMatrixCAttr});
+      b.getArrayAttr({splitMemoryCoordsAttr, toRowsAndColsAttr, toMatrixCAttr, splitAgainAttr, swapBackAttr});
   return idToMatrixCMaps;
 }
 
@@ -486,7 +529,7 @@ void WmmaEmitter::emitThreadwiseLoop(OpBuilder &b, Location loc, Value argA,
 }
 
 ArrayAttr WmmaEmitter::computeOutputTransforms(
-    PatternRewriter &b, Location loc, int64_t mLen, int64_t nLen,
+    PatternRewriter &b, Location loc, int64_t mLen, int64_t nLen, bool isKContigousDimA, bool isKContiguousDimB, int64_t computeMPerThread, int64_t computeNPerThread,
     std::optional<int64_t> blockSize,
     std::optional<ArrayRef<int64_t>> bidGridLengths) {
 

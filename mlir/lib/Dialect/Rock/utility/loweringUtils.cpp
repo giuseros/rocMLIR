@@ -203,10 +203,21 @@ FailureOr<RegsAsMatrixSubTiles> mlir::rock::getLoadRegsAsTileViews(
     toGlobalIdx.passThrough({"g"}, {0}, {"g_block"});
     toGlobalIdx.unmerge("k", 1, {"k_loop", "k_thread", "k_iter"},
                         {kGlobal / kPerBlock, kThreads, kPerThread});
-    toGlobalIdx.unmerge(dName, 2, {thisBlockDim, dThreadName, dIterName},
-                        {dGlobal / dPerBlock, dThreads, dPerThread});
+
+    if (isKContigousDim)
+      toGlobalIdx.unmerge(dName, 2, {thisBlockDim, dThreadName, dIterName},
+                          {dGlobal / dPerBlock, dThreads, dPerThread});
+    else{
+      llvm::errs()<<dGlobal/dPerBlock<<"\n";
+      llvm::errs()<<dPerThread<<"\n";
+      llvm::errs()<<dThreads<<"\n";
+      toGlobalIdx.unmerge(dName, 2, {thisBlockDim, dIterName, dThreadName},
+                          {dGlobal / dPerBlock, 2, 64});
+    }
+
     toGlobalIdx.ignore(otherBlockDim);
     TransformMapAttr toGlobalIdxAttr = toGlobalIdx.get();
+    toGlobalIdxAttr.dump();
     gpuViews.gridSubTile = b.getArrayAttr({splitIdAttr, toGlobalIdxAttr});
   }
   {
@@ -309,8 +320,9 @@ FailureOr<RegsAsMatrixSubTiles> mlir::rock::getPackedRegsAsTileViews(
     toGlobalIdx.unmerge("k", 0,
                         {"k_thread", "kouterPerThread", "kpackPerThread"},
                         {kThreads, kOuterPerThread, kpackPerThread});
-    toGlobalIdx.unmerge(dName, 1, {dThreadName, dIterName},
+   toGlobalIdx.unmerge(dName, 1, {dThreadName, dIterName},
                         {dThreads, dPerThread});
+
     TransformMapAttr toGlobalIdxAttr = toGlobalIdx.get();
     gpuViews.blockSubTile = b.getArrayAttr({splitIdAttr, toGlobalIdxAttr});
   }

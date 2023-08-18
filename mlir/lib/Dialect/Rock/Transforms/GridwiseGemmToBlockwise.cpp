@@ -997,6 +997,9 @@ struct GridwiseGemmAccelRewritePattern
     Value storeBufferA = b.create<GpuAllocOp>(loc, loadBufferA.getType());
     Value storeBufferB = b.create<GpuAllocOp>(loc, loadBufferB.getType());
 
+    bool isKContiguousDimA = aVectorDim == GemmDimension::K;
+    bool isKContiguousDimB = bVectorDim == GemmDimension::K;
+
     // We invert the transforms that are iter --> K x D slice of the tensor
     // so that we can view loadBuffer as a K x D tensor
     ArrayAttr loadBufferAViews =
@@ -1009,7 +1012,7 @@ struct GridwiseGemmAccelRewritePattern
         getPackedRegsAsTileViews(b, loc, op.getA(), "m", bidGridOrder,
                                  bidGridLengths, blockSize, kPerBlock,
                                  mPerBlock, aCopyKPerThread, copyMPerThread,
-                                 kpack, aVectorDim == GemmDimension::K);
+                                 kpack, isKContiguousDimA);
     if (failed(maybeALdsStoreViews)) {
       return failure();
     }
@@ -1028,7 +1031,7 @@ struct GridwiseGemmAccelRewritePattern
         getPackedRegsAsTileViews(b, loc, op.getB(), "n", bidGridOrder,
                                  bidGridLengths, blockSize, kPerBlock,
                                  nPerBlock, bCopyKPerThread, copyNPerThread,
-                                 kpack, bVectorDim == GemmDimension::K);
+                                 kpack, isKContiguousDimB);
     if (failed(maybeBLdsStoreViews)) {
       return failure();
     }
@@ -1257,7 +1260,7 @@ struct GridwiseGemmAccelRewritePattern
     Value convertedC = b.create<rock::GpuAllocOp>(loc, convertedCType);
 
     ArrayAttr idToMatrixCMaps = accelEmitterPtr->computeOutputTransforms(
-        b, loc, M, N, blockSize, bidGridLengths);
+        b, loc, M, N, isKContiguousDimA, isKContiguousDimB, copyMPerThread, copyNPerThread, blockSize, bidGridLengths);
 
     Value registerC = accelEmitterPtr->computeOutputConversion(
         b, loc, M, N, blockSize, gridSize, regCAllocOp, convertedC,

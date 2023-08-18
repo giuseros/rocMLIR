@@ -119,6 +119,7 @@ struct AccelEmitter {
   /// be a thread-level view of the output.
   virtual ArrayAttr computeOutputTransforms(
       PatternRewriter &b, Location loc, int64_t mLen, int64_t nLen,
+      bool isKContigousDimA, bool isKContiguousDimB, int64_t computeMPerThread, int64_t computeNPerThread,
       std::optional<int64_t> blockSize = std::nullopt,
       std::optional<ArrayRef<int64_t>> bidGridLengths = std::nullopt) = 0;
 
@@ -160,7 +161,7 @@ struct MfmaEmitter : public AccelEmitter {
                                Value laneId) override;
 
   ArrayAttr computeOutputTransforms(
-      PatternRewriter &b, Location loc, int64_t mLen, int64_t nLen,
+      PatternRewriter &b, Location loc, int64_t mLen, int64_t nLen, bool isKContigousDimA, bool isKContiguousDimB, int64_t computeMPerThread, int64_t computeNPerThread,
       std::optional<int64_t> blockSize = std::nullopt,
       std::optional<ArrayRef<int64_t>> bidGridLengths = std::nullopt) override;
 
@@ -190,7 +191,7 @@ struct WmmaEmitter : public AccelEmitter {
                                Value laneId) override;
 
   ArrayAttr computeOutputTransforms(
-      PatternRewriter &b, Location loc, int64_t mLen, int64_t nLen,
+      PatternRewriter &b, Location loc, int64_t mLen, int64_t nLen, bool isKContigousDimA, bool isKContiguousDimB, int64_t computeMPerThread, int64_t computeNPerThread,
       std::optional<int64_t> blockSize = std::nullopt,
       std::optional<ArrayRef<int64_t>> bidGridLengths = std::nullopt) override;
 
