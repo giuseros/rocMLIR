@@ -313,7 +313,7 @@ mlir::rock::multiBuffer(RewriterBase &rewriter, rock::GpuAllocOp allocOp,
   return success();
 }
 
-FailureOr<SmallVector<rock::GpuAllocOp>> mlir::rock::multiBuffer(
+LogicalResult mlir::rock::multiBuffer(
     rock::GpuAllocOp allocOp, SmallVectorImpl<rock::GpuAllocOp> &newAllocs,
     unsigned multiBufferingFactor, bool skipOverrideAnalysis) {
   IRRewriter rewriter(allocOp->getContext());

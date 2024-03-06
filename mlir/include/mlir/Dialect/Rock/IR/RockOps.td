@@ -1153,15 +1153,15 @@ defvar AccelResTypes = [VectorOfLengthAndType<[4, 8, 16, 32], [F32, I32, F16, BF
 
 // blockwise_gemm_accel
 def Rock_BlockwiseGemmAccelOp:
-    Rock_Op<"blockwise_gemm_accel">,
+    Rock_Op<"blockwise_gemm_accel", [AttrSizedOperandSegments]>,
     Arguments<(ins MemRefOf<LdsBufferTypes>:$matrixA,
                    MemRefOf<LdsBufferTypes>:$matrixB,
                    I32Attr:$inMPerThread,
                    I32Attr:$inNPerThread,
                    UnitAttr:$rotateMWithK,
                    UnitAttr:$rotateNWithK,
-                   MemRefOf<AccelArgTypes>:$bufferA,
-                   MemRefOf<AccelArgTypes>:$bufferB,
+                   Variadic<MemRefOf<AccelArgTypes>>:$bufferA,
+                   Variadic<MemRefOf<AccelArgTypes>>:$bufferB,
                    MemRefOf<AccelResTypes>:$matrixC,
                    StrAttr:$arch,
                    Rock_GemmFeaturesAttr:$features,

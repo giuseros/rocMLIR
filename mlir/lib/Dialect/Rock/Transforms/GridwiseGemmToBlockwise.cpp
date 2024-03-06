@@ -2580,10 +2580,15 @@ struct GridwiseGemmAccelRewritePattern
     int64_t nOutputVectors = nResultVectors * mRepeats * nRepeats;
 
     // Logic to setup buffers for blockwise_gemm_accel.
-    auto arrayA =
-        gpuAlloc(b, loc, kBasePerThread, argTypeA, AddressSpace::Private);
-    auto arrayB =
-        gpuAlloc(b, loc, kBasePerThread, argTypeB, AddressSpace::Private);
+    SmallVector<Value> regsA;
+    SmallVector<Value> regsB;
+
+    for (int i =0; i<params.kpackPerThread*mRepeats*nRepeats;i++){
+        regsA.push_back(
+            gpuAlloc(b, loc, 2, argTypeA, AddressSpace::Private));
+        regsB.push_back(
+            gpuAlloc(b, loc, 2, argTypeB, AddressSpace::Private));
+    }
     auto regCAllocOp =
         gpuAlloc(b, loc, nOutputVectors, accVectorType, AddressSpace::Private);
 
@@ -2659,7 +2664,7 @@ struct GridwiseGemmAccelRewritePattern
             b.getI32IntegerAttr(copyMPerThread),
             b.getI32IntegerAttr(copyNPerThread),
             (rotateMWithK ? b.getUnitAttr() : nullptr),
-            (rotateNWithK ? b.getUnitAttr() : nullptr), arrayA, arrayB,
+            (rotateNWithK ? b.getUnitAttr() : nullptr), regsA, regsB,
             regCAllocOp, op.getArchAttr(), op.getFeaturesAttr(),
             op.getBlockSizeAttr(), op.getParamsAttr());
         b.create<rock::YieldOp>(loc);

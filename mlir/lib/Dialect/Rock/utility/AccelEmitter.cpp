@@ -486,7 +486,7 @@ Value MfmaEmitter::wrapLDSBufferForLoad(OpBuilder &b, Location loc,
                                         Value buffer, int64_t blockSize,
                                         int64_t dInCopyPerThread,
                                         StringRef dName, bool rotateDWithK,
-                                        bool doSplitKAcrossThreadsFirst) const {
+                                        bool doSplitKAcrossThreadsFirst, bool iterateOverK) const {
 
   StringRef thisWaveDim = dName == "m" ? "wave_m" : "wave_n";
   StringRef otherWaveDim = dName == "m" ? "wave_n" : "wave_m";
@@ -561,8 +561,17 @@ Value MfmaEmitter::wrapLDSBufferForLoad(OpBuilder &b, Location loc,
     transformAttrs.push_back(offsetAttr);
 
   } else {
-    TopDownTMBuilder splitTid(b, {"tid", "d_iter", "k_iter"},
-                              {blockSize, dRepeats, kpackPerThread});
+
+    SmallVector<StringRef> names{"tid", "d_iter", "k_iter"};
+    SmallVector<int64_t> shape{blockSize, dRepeats, kpackPerThread};
+    if (!iterateOverK){
+      names.push_back("k_dummy");
+      shape.push_back(2); // this needs to be generic
+    }
+    TopDownTMBuilder splitTid(b, names, shape);
+    if (!iterateOverK){
+      splitTid.ignore("k_dummy");
+    }
     splitTid.merge(
         {"wave_id", "blk_id", "blk_td"}, {0, 1, 2}, "tid",
         {blockSize / waveSize, waveSize / inputSpanLen, inputSpanLen});
@@ -956,7 +965,7 @@ Value WmmaEmitter::wrapLDSBufferForLoad(OpBuilder &b, Location loc,
                                         Value buffer, int64_t blockSize,
                                         int64_t dInCopyPerThread,
                                         StringRef dName, bool rotateDWithK,
-                                        bool doSplitKAcrossThreadsFirst) const {
+                                        bool doSplitKAcrossThreadsFirst, bool iterateOverK) const {
 
   // Extract relevant tuning parameters
   int64_t mPerBlock = tuningParams.getMPerBlock();

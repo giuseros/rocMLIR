@@ -20,8 +20,8 @@ LogicalResult multiBuffer(RewriterBase &rewriter, rock::GpuAllocOp allocOp,
                           SmallVectorImpl<rock::GpuAllocOp> &newAllocs,
                           unsigned multiplier, bool skipOverrideAnalysis);
 
-FailureOr<SmallVector<rock::GpuAllocOp>>
-multiBuffer(rock::GpuAllocOp allocOp,
+
+LogicalResult multiBuffer(rock::GpuAllocOp allocOp,
             SmallVectorImpl<rock::GpuAllocOp> &newAllocs, unsigned multiplier,
             bool skipOverrideAnalysis);
 

@@ -431,6 +431,7 @@ struct BlockwiseGemmAccelRewritePattern
     int64_t nRepeats = params.nRepeats;
     int64_t kBase = params.kBase;
     int64_t kBasePerThread = params.kBasePerThread;
+    int64_t kpackPerThread = params.kpackPerThread;
 
     auto tid = b.create<WorkitemIdOp>(loc, b.getIndexType());
 
@@ -462,53 +463,72 @@ struct BlockwiseGemmAccelRewritePattern
     // considered a temporary hack until we have a proper way of "searching"
     // through different schedules (either heuristically or automatically)
 
+    auto regsA = llvm::to_vector(adaptor.getBufferA());
+    auto regsB = llvm::to_vector(adaptor.getBufferB());
     Value wrappedLDSBufferForLoadA = accelEmitterPtr->wrapLDSBufferForLoad(
         b, loc, op.getMatrixA(), op.getBlockSize(), op.getInMPerThread(), "m",
-        op.getRotateMWithK());
+        op.getRotateMWithK(), false, false);
     Value wrappedLDSBufferForLoadB = accelEmitterPtr->wrapLDSBufferForLoad(
         b, loc, op.getMatrixB(), op.getBlockSize(), op.getInNPerThread(), "n",
-        op.getRotateNWithK());
+        op.getRotateNWithK(), false, false);
+    Value viewC = accelEmitterPtr->generateThreadwiseViewBufferC(
+        b, loc, adaptor.getMatrixC());
 
-    auto mLoop = b.create<affine::AffineForOp>(loc, 0, mRepeats);
-    {
-      OpBuilder::InsertionGuard guard(b);
-      b.setInsertionPointToStart(mLoop.getBody());
-      Value i = mLoop.getInductionVar();
+    auto getIndices= [&](int ii){
+      int i = (ii / kpackPerThread) % mRepeats;
+      int j = ii / (kpackPerThread * mRepeats);
+      int k = ii % kpackPerThread;
+      Value iv = b.create<arith::ConstantIndexOp>(loc, i);
+      Value jv = b.create<arith::ConstantIndexOp>(loc, j);
+      Value kv = b.create<arith::ConstantIndexOp>(loc, k);
+      return std::tuple(iv, jv, kv);
+    };
+
+    auto loadA= [&](int ii){
+      auto [iv, jv, kv] = getIndices(ii);
 
       // regsA = read A from LDS
       b.create<ThreadwiseReadIntoOp>(loc, wrappedLDSBufferForLoadA,
-                                     op.getBufferA(), b.getArrayAttr({}),
-                                     ValueRange{tid, i}, true, true);
+                                     regsA[ii], b.getArrayAttr({}),
+                                     ValueRange{tid, iv, kv}, true, true);
+    };
 
-      auto nLoop = b.create<affine::AffineForOp>(loc, 0, nRepeats);
-      {
-        OpBuilder::InsertionGuard guard(b);
-        b.setInsertionPointToStart(nLoop.getBody());
-        Value j = nLoop.getInductionVar();
 
-        // regsB = read B from LDS
-        b.create<ThreadwiseReadIntoOp>(loc, wrappedLDSBufferForLoadB,
-                                       op.getBufferB(), b.getArrayAttr({}),
-                                       ValueRange{tid, j}, true, true);
+    auto loadB= [&](int ii){
+      auto [iv, jv, kv] = getIndices(ii);
+      // regsB = read B from LDS
+      b.create<ThreadwiseReadIntoOp>(loc, wrappedLDSBufferForLoadB,
+                                     regsB[ii], b.getArrayAttr({}),
+                                     ValueRange{tid, jv, kv}, true, true);
 
+    };
+
+    auto matmul = [&](int ii){
+      auto [iv, jv, kv] = getIndices(ii);
+      Value viewA = accelEmitterPtr->generateThreadwiseViewBufferA(
+          b, loc, regsA[ii]);
+      Value viewB = accelEmitterPtr->generateThreadwiseViewBufferB(
+          b, loc, regsB[ii]);
+      for (int kinner = 0; kinner < 2; kinner++) {
         // regsC += regsA * regsB
-        auto kLoop = b.create<affine::AffineForOp>(loc, 0, kBasePerThread);
-        {
-          OpBuilder::InsertionGuard guard(b);
-          b.setInsertionPointToStart(kLoop.getBody());
-          Value viewA = accelEmitterPtr->generateThreadwiseViewBufferA(
-              b, loc, adaptor.getBufferA());
-          Value viewB = accelEmitterPtr->generateThreadwiseViewBufferB(
-              b, loc, adaptor.getBufferB());
-          Value viewC = accelEmitterPtr->generateThreadwiseViewBufferC(
-              b, loc, adaptor.getMatrixC());
-          Value k = kLoop.getInductionVar();
-          b.create<ThreadwiseAccelGemmOp>(loc, viewA, viewB, viewC,
-                                          ValueRange{i, j, k}, arch,
-                                          op.getFeaturesAttr(), tuningParams);
-        }
+        // Value k = kLoop.getInductionVar();
+        Value kinnerv = b.create<arith::ConstantIndexOp>(loc, kinner);
+        b.create<ThreadwiseAccelGemmOp>(loc, viewA, viewB, viewC,
+                                        ValueRange{iv, jv, kinnerv}, arch,
+                                        op.getFeaturesAttr(), tuningParams);
       }
+    };
+
+    const int L = kpackPerThread * mRepeats * nRepeats;
+
+    loadA(0);
+    loadB(0);
+    for (int ii = 1; ii < L; ii++) {
+      loadA(ii);
+      loadB(ii);
+      matmul(ii-1);
     }
+    matmul(L-1);
     b.eraseOp(op);
     return success();
   }

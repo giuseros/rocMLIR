@@ -180,7 +180,7 @@ void LowerRockOpsToGPUPass::runOnOperation() {
     if (auto attr = theFunc->getAttr("wave_size")) {
       int32_t waveSize = attr.template cast<IntegerAttr>().getInt();
       if (blockSize / waveSize >= 2) {
-        gpuFunc->setAttr("rocdl.waves_per_eu", b.getI32IntegerAttr(2));
+        gpuFunc->setAttr("rocdl.waves_per_eu", b.getI32IntegerAttr(3));
       }
     }
 

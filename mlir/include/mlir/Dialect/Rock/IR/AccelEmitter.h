@@ -101,7 +101,8 @@ struct AccelEmitter {
   wrapLDSBufferForLoad(OpBuilder &b, Location loc, Value buffer,
                        int64_t blockSize, int64_t dInCopyPerThread,
                        StringRef dName, bool rotateDWithK,
-                       bool doSplitKAcrossThreadsFirst = false) const = 0;
+                       bool doSplitKAcrossThreadsFirst = false,
+                       bool iterateOverK = true) const = 0;
 
   /// This functions creates the subtile views that is :
   /// 1) gridSubTileView :
@@ -179,7 +180,7 @@ struct MfmaEmitter : public AccelEmitter {
   wrapLDSBufferForLoad(OpBuilder &b, Location loc, Value buffer,
                        int64_t blockSize, int64_t dInCopyPerThread,
                        StringRef dName, bool rotateDWithK,
-                       bool doSplitKAcrossThreadsFirst = false) const override;
+                       bool doSplitKAcrossThreadsFirst = false, bool iterateOverK = true) const override;
 
   virtual RegsAsMatrixSubTiles createAccelGemmOperandTransforms(
       OpBuilder &b, Location loc, int64_t kIters,
@@ -226,7 +227,7 @@ struct WmmaEmitter : public AccelEmitter {
   wrapLDSBufferForLoad(OpBuilder &b, Location loc, Value buffer,
                        int64_t blockSize, int64_t dInCopyPerThread,
                        StringRef dName, bool rotateDWithK,
-                       bool doSplitKAcrossThreadsFirst = false) const override;
+                       bool doSplitKAcrossThreadsFirst = false, bool iterateOverK = true) const override;
 
   virtual RegsAsMatrixSubTiles createAccelGemmOperandTransforms(
       OpBuilder &b, Location loc, int64_t kIters,
