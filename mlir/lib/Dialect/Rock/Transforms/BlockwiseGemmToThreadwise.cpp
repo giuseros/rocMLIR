@@ -30,6 +30,7 @@
 #include "mlir/Dialect/Rock/utility/loweringUtils.h"
 #include "mlir/Dialect/Rock/utility/math.h"
 #include "mlir/Dialect/Rock/utility/transformMapUtils.h"
+#include "mlir/Dialect/LLVMIR/ROCDLDialect.h"
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
@@ -433,6 +434,8 @@ struct BlockwiseGemmAccelRewritePattern
     int64_t kBasePerThread = params.kBasePerThread;
 
     auto tid = b.create<WorkitemIdOp>(loc, b.getIndexType());
+    auto regsA = llvm::to_vector(adaptor.getBufferA());
+    auto regsB = llvm::to_vector(adaptor.getBufferB());
 
     LLVM_DEBUG(llvm::dbgs()
                << "argVectorType A: " << argTypeA << "\n"
@@ -468,44 +471,119 @@ struct BlockwiseGemmAccelRewritePattern
     Value wrappedLDSBufferForLoadB = accelEmitterPtr->wrapLDSBufferForLoad(
         b, loc, op.getMatrixB(), op.getBlockSize(), op.getInNPerThread(), "n",
         op.getRotateNWithK());
+    // Value viewA = accelEmitterPtr->generateThreadwiseViewBufferA(
+    //     b, loc, regsA[0]);
+    // Value viewB = accelEmitterPtr->generateThreadwiseViewBufferB(
+    //     b, loc, regsB[0]);
+    Value viewC = accelEmitterPtr->generateThreadwiseViewBufferC(
+        b, loc, adaptor.getMatrixC());
 
-    auto mLoop = b.create<affine::AffineForOp>(loc, 0, mRepeats);
+    // int numInternalRegs = 1;
+    // int64_t kpack = tuningParams.getKpack();
+    // if (params.kBase < kpack)
+    //     numInternalRegs = (kpack/params.kBase);
+
+    //auto mLoop = b.create<affine::AffineForOp>(loc, 0, mRepeats);
+    //     for (int k = 0; k<kBasePerThread; k++)
+    // {
+    //   // OpBuilder::InsertionGuard guard(b);
+    //   // b.setInsertionPointToStart(mLoop.getBody());
+    //   // Value i = mLoop.getInductionVar();
+
+
+    //   // auto nLoop = b.create<affine::AffineForOp>(loc, 0, nRepeats);
+    //   for (int j = 0; j<nRepeats; j++)
+    //   {
+    //     // OpBuilder::InsertionGuard guard(b);
+    //     // b.setInsertionPointToStart(nLoop.getBody());
+    //     // Value j = nLoop.getInductionVar();
+
+    //     // regsB = read B from LDS
+
+    //     // regsC += regsA * regsB
+    //     // auto kLoop = b.create<affine::AffineForOp>(loc, 0, kBasePerThread);
+    // for (int i = 0; i<mRepeats; i++)
+       // for (int iters = 0; iters<mRepeats*nRepeats*kBasePerThread; iters++)
+       // {
+       //   int k = iters % kBasePerThread;
+       //   int j = (iters / kBasePerThread) % nRepeats;
+       //   int i = iters/(kBasePerThread*nRepeats);
+       //   Value jv = b.create<arith::ConstantIndexOp>(loc, j);
+       //   Value iv = b.create<arith::ConstantIndexOp>(loc, i);
+       //   Value kv = b.create<arith::ConstantIndexOp>(loc, k);
+       //   b.create<ThreadwiseReadIntoOp>(loc, wrappedLDSBufferForLoadB,
+       //                                  regsB[0], b.getArrayAttr({}),
+       //                                  ValueRange{tid, jv, kv}, true, true);
+       //   b.create<ThreadwiseReadIntoOp>(loc, wrappedLDSBufferForLoadA,
+       //                                  regsA[0], b.getArrayAttr({}),
+       //                                  ValueRange{tid, iv, kv}, true, true);
+       //   // b.setInsertionPointToStart(kLoop.getBody());
+       //   // Value k = kLoop.getInductionVar();
+       //   for (int kInner = 0; kInner<numInternalRegs; kInner++){
+       //     Value ki = b.create<arith::ConstantIndexOp>(loc, kInner);
+       //     b.create<ThreadwiseAccelGemmOp>(loc, viewA, viewB, viewC,
+       //                                     ValueRange{iv, jv, ki}, arch,
+       //                                     op.getFeaturesAttr(), tuningParams);
+       //   }
+       // }
+    //   }
+    // }
+ for (int i = 0; i<mRepeats; i++)
     {
-      OpBuilder::InsertionGuard guard(b);
-      b.setInsertionPointToStart(mLoop.getBody());
-      Value i = mLoop.getInductionVar();
+      Value iv = b.create<arith::ConstantIndexOp>(loc, i);
+      // OpBuilder::InsertionGuard guard(b);
+      // b.setInsertionPointToStart(mLoop.getBody());
+      // Value i = mLoop.getInductionVar();
 
-      // regsA = read A from LDS
-      b.create<ThreadwiseReadIntoOp>(loc, wrappedLDSBufferForLoadA,
-                                     op.getBufferA(), b.getArrayAttr({}),
-                                     ValueRange{tid, i}, true, true);
+      for (int k = 0; k<params.kpackPerThread;k++){
+        // regsA = read A from LDS
+        Value kv = b.create<arith::ConstantIndexOp>(loc, k);
+          llvm::errs()<<"load from A ["<< i <<"-" << k <<"]\n";
+        b.create<ThreadwiseReadIntoOp>(loc, wrappedLDSBufferForLoadA,
+                                       regsA[k], b.getArrayAttr({}),
+                                       ValueRange{tid, iv, kv}, true, true);
+      }
 
-      auto nLoop = b.create<affine::AffineForOp>(loc, 0, nRepeats);
+      // auto nLoop = b.create<affine::AffineForOp>(loc, 0, nRepeats);
+      for (int j = 0; j<nRepeats; j++)
       {
-        OpBuilder::InsertionGuard guard(b);
-        b.setInsertionPointToStart(nLoop.getBody());
-        Value j = nLoop.getInductionVar();
+        Value jv = b.create<arith::ConstantIndexOp>(loc, j);
+        // OpBuilder::InsertionGuard guard(b);
+        // b.setInsertionPointToStart(nLoop.getBody());
+        // Value j = nLoop.getInductionVar();
 
         // regsB = read B from LDS
-        b.create<ThreadwiseReadIntoOp>(loc, wrappedLDSBufferForLoadB,
-                                       op.getBufferB(), b.getArrayAttr({}),
-                                       ValueRange{tid, j}, true, true);
+        for (int k = 0; k<params.kpackPerThread;k++){
+          // regsA = read A from LDS
+          Value kv = b.create<arith::ConstantIndexOp>(loc, k);
+          llvm::errs()<<"load from B ["<< j <<"-"<< k <<"]\n";
+          b.create<ThreadwiseReadIntoOp>(loc, wrappedLDSBufferForLoadB,
+                                         regsB[k], b.getArrayAttr({}),
+                                         ValueRange{tid, jv, kv}, true, true);
+        }
+        int numInternalRegs = 1;
+        int64_t kpack = tuningParams.getKpack();
+        if (params.kBase < kpack)
+            numInternalRegs = kpack/params.kBase;
 
         // regsC += regsA * regsB
-        auto kLoop = b.create<affine::AffineForOp>(loc, 0, kBasePerThread);
+        // auto kLoop = b.create<affine::AffineForOp>(loc, 0, kBasePerThread);
+        for (int k = 0; k<params.kpackPerThread; k++)
         {
-          OpBuilder::InsertionGuard guard(b);
-          b.setInsertionPointToStart(kLoop.getBody());
+          // OpBuilder::InsertionGuard guard(b);
+          // b.setInsertionPointToStart(kLoop.getBody());
           Value viewA = accelEmitterPtr->generateThreadwiseViewBufferA(
-              b, loc, adaptor.getBufferA());
+              b, loc, regsA[k]);
           Value viewB = accelEmitterPtr->generateThreadwiseViewBufferB(
-              b, loc, adaptor.getBufferB());
-          Value viewC = accelEmitterPtr->generateThreadwiseViewBufferC(
-              b, loc, adaptor.getMatrixC());
-          Value k = kLoop.getInductionVar();
-          b.create<ThreadwiseAccelGemmOp>(loc, viewA, viewB, viewC,
-                                          ValueRange{i, j, k}, arch,
-                                          op.getFeaturesAttr(), tuningParams);
+              b, loc, regsB[k]);
+          // Value k = kLoop.getInductionVar();
+          llvm::errs()<<"mfma [" << i << "-"<<j<<"-"<<k<<"-"<<"]\n";
+          for (int kInner = 0; kInner<numInternalRegs; kInner++){
+            Value kv = b.create<arith::ConstantIndexOp>(loc, kInner);
+            b.create<ThreadwiseAccelGemmOp>(loc, viewA, viewB, viewC,
+                                            ValueRange{iv, jv, kv}, arch,
+                                            op.getFeaturesAttr(), tuningParams);
+          }
         }
       }
     }

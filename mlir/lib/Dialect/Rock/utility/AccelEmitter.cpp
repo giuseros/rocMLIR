@@ -561,8 +561,9 @@ Value MfmaEmitter::wrapLDSBufferForLoad(OpBuilder &b, Location loc,
     transformAttrs.push_back(offsetAttr);
 
   } else {
-    TopDownTMBuilder splitTid(b, {"tid", "d_iter", "k_iter"},
-                              {blockSize, dRepeats, kpackPerThread});
+    TopDownTMBuilder splitTid(b, {"tid", "d_iter", "k_iter", "ignore_k"},
+                              {blockSize, dRepeats, kpackPerThread, 1});
+    splitTid.ignore("ignore_k");
     splitTid.merge(
         {"wave_id", "blk_id", "blk_td"}, {0, 1, 2}, "tid",
         {blockSize / waveSize, waveSize / inputSpanLen, inputSpanLen});
