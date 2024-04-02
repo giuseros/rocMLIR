@@ -8,10 +8,12 @@ add_rocmlir_dialect_library(MLIRRockTransforms
   CheckResidency.cpp
   CleanMath.cpp
   ConvToGemm.cpp
+  ExpandThreadwise.cpp
   FoldBroadcast.cpp
   GemmToGridwise.cpp
   RockMultibuffer.cpp
   RockPipeline.cpp
+  RockScheduling.cpp
   Regularize.cpp
   SugarToLoops.cpp
   GridwiseGemmToBlockwise.cpp

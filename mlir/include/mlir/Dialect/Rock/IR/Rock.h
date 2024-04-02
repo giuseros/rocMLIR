@@ -75,6 +75,7 @@ constexpr int64_t maxWavesPerWG = 4;
 #include "mlir/Dialect/Rock/IR/RockAcceptingViewOpInterface.h"
 #include "mlir/Dialect/Rock/IR/RockConvInterface.h"
 #include "mlir/Dialect/Rock/IR/RockGemmWrapperInterface.h"
+#include "mlir/Dialect/Rock/IR/RockThreadwiseOpInterface.h"
 #include "mlir/Dialect/Rock/IR/RockWriterOpInterface.h"
 
 #define GET_OP_CLASSES

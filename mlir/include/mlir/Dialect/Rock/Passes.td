@@ -92,9 +92,19 @@ def RockPipelinePass : Pass<"rock-pipeline", "::mlir::func::FuncOp"> {
   let summary = "Pipeline loops";
 }
 
+def RockSchedulingPass : Pass<"rock-scheduling", "::mlir::func::FuncOp"> {
+  let dependentDialects = ["rock::RockDialect", "affine::AffineDialect"];
+  let summary = "Schedule loops";
+}
+
 def RockVectorizeFusionsPass : Pass<"rock-vectorize-fusions", "::mlir::func::FuncOp"> {
   let dependentDialects = ["rock::RockDialect", "affine::AffineDialect"];
   let summary = "Vectorize affine element-wise loops";
+}
+
+def RockExpandThreadwisePass : Pass<"rock-expand-threadwise", "::mlir::func::FuncOp"> {
+  let dependentDialects = ["rock::RockDialect", "affine::AffineDialect", "memref::MemRefDialect"];
+  let summary = "Expnand threadwise loops";
 }
 
 def RockBufferLoadMergePass : Pass<"rock-buffer-load-merge", "::mlir::func::FuncOp"> {

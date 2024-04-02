@@ -21,6 +21,7 @@
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/MemRef/Transforms/Transforms.h"
 #include "mlir/Dialect/Rock/IR/Rock.h"
+#include "mlir/Dialect/Rock/IR/RockThreadwiseOpInterface.h"
 #include "mlir/Dialect/Rock/Passes.h"
 #include "mlir/Dialect/Rock/Transforms/RockMultibuffer.h"
 #include "mlir/Dialect/Rock/utility/loweringUtils.h"
@@ -622,7 +623,7 @@ void RockPipeline::runOnOperation() {
     SmallVector<rock::StageOp> stages;
 
     // Get the initiation interval (II)
-    int64_t ii = forOp->removeAttr(rockPipelineAttrName)
+    int64_t ii = forOp->getAttr(rockPipelineAttrName)
                      .dyn_cast<rock::PipelineAttr>()
                      .getInitiationInterval();
 
@@ -685,7 +686,8 @@ void RockPipeline::runOnOperation() {
       RewritePatternSet patterns(&getContext());
       patterns.add<RemoveStagesRewritePattern, PushBarrierDownRewritePattern>(
           &getContext());
-      (void)applyPatternsAndFoldGreedily(getOperation(), std::move(patterns));
+      // (void)applyPatternsAndFoldGreedily(getOperation(), std::move(patterns));
     }
   }
+
 }

@@ -138,6 +138,9 @@ void rock::buildKernelPipeline(OpPassManager &pm,
   funcPm.addPass(rock::createRockRegularizePass());
   funcPm.addPass(rock::createRockGridwiseGemmToBlockwisePass());
   funcPm.addPass(rock::createRockBlockwiseGemmToThreadwisePass());
+  // funcPm.addPass(rock::createRockPipelinePass());
+  // funcPm.addPass(rock::createRockExpandThreadwisePass());
+  funcPm.addPass(createCanonicalizerPass());
 
   if (!options.enableApplicability) {
     if (options.enableFusion) {
@@ -166,6 +169,8 @@ void rock::buildKernelPipeline(OpPassManager &pm,
     funcPm.addPass(rock::createRockThreadwiseGemmLoweringPass());
     funcPm.addPass(rock::createRockAnalyzeMemoryUsePass());
     funcPm.addPass(rock::createRockSugarToLoopsPass());
+    funcPm.addPass(createCanonicalizerPass());
+    funcPm.addPass(rock::createRockSchedulingPass());
     funcPm.addPass(rock::createRockCleanMathPass());
     funcPm.addPass(math::createMathLegalizeToF32());
     funcPm.addPass(rock::createRockBufferLoadMergePass());

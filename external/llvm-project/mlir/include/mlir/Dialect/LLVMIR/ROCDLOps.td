@@ -156,15 +156,39 @@ def ROCDL_BarrierOp : ROCDL_Op<"barrier"> {
 }
 
 def ROCDL_SetPrioOp : ROCDL_IntrOp<"s.setprio", [], [], [], 0>,
-  Arguments<(ins I16:$priority)> {
+  Arguments<(ins I16Attr:$priority)> {
   let results = (outs);
   let assemblyFormat = "$priority attr-dict";
+  string llvmBuilder =
+    "createIntrinsicCall(builder, llvm::Intrinsic::amdgcn_s_setprio,builder.getInt16(op.getPriority()));";
 }
 
 def ROCDL_SchedBarrier : ROCDL_IntrOp<"sched.barrier", [], [], [], 0>,
-  Arguments<(ins I32:$mask)> {
+  Arguments<(ins I32Attr:$mask)> {
   let results = (outs);
   let assemblyFormat = "$mask attr-dict";
+  string llvmBuilder =
+    "createIntrinsicCall(builder, llvm::Intrinsic::amdgcn_sched_barrier,builder.getInt32(op.getMask()));";
+}
+
+def ROCDL_IglpOpt: ROCDL_IntrOp<"iglp.opt", [], [], [], 0>,
+  Arguments<(ins I32Attr:$mask)> {
+  let results = (outs);
+  let assemblyFormat = "$mask attr-dict";
+  string llvmBuilder =
+    "createIntrinsicCall(builder, llvm::Intrinsic::amdgcn_iglp_opt,builder.getInt32(op.getMask()));";
+}
+
+def ROCDL_SchedGroupBarrier : ROCDL_IntrOp<"sched.group.barrier", [], [], [], 0>,
+  Arguments<(ins I32Attr:$mask, I32Attr:$numInstr, I32Attr:$id)> {
+  let results = (outs);
+  let assemblyFormat = "$mask attr-dict";
+  string llvmBuilder = [{
+    createIntrinsicCall(builder, llvm::Intrinsic::amdgcn_sched_group_barrier,
+    {builder.getInt32(op.getMask()),
+    builder.getInt32(op.getNumInstr()),
+    builder.getInt32(op.getId())});
+    }];
 }
 
 
@@ -327,11 +351,11 @@ def ROCDL_DPPMovOp : ROCDL_IntrOp<"mov.dpp", [], [0],
       auto vdataType = moduleTranslation.convertType(op.getSrc().getType());
       llvm::Value *args[] = {
         moduleTranslation.lookupValue(op.getSrc()),
-          builder.getInt32(op.getDppCtrl()),  
-          builder.getInt32(op.getRowMask()),  
-          builder.getInt32(op.getBankMask()),  
+          builder.getInt32(op.getDppCtrl()),
+          builder.getInt32(op.getRowMask()),
+          builder.getInt32(op.getBankMask()),
           builder.getInt1(op.getBoundCtrl())
-      }; 
+      };
       $res = createIntrinsicCall(builder,
         llvm::Intrinsic::amdgcn_mov_dpp, args, {vdataType});
   }];

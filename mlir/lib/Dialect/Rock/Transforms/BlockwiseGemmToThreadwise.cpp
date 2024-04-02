@@ -470,6 +470,7 @@ struct BlockwiseGemmAccelRewritePattern
         op.getRotateNWithK());
 
     auto mLoop = b.create<affine::AffineForOp>(loc, 0, mRepeats);
+    mLoop->setAttr("forceUnroll", b.getBoolAttr(true));
     {
       OpBuilder::InsertionGuard guard(b);
       b.setInsertionPointToStart(mLoop.getBody());
@@ -481,6 +482,7 @@ struct BlockwiseGemmAccelRewritePattern
           ValueRange{tid, i}, /*forceUnroll=*/true, /*useIndexDiffs=*/true);
 
       auto nLoop = b.create<affine::AffineForOp>(loc, 0, nRepeats);
+      nLoop->setAttr("forceUnroll", b.getBoolAttr(true));
       {
         OpBuilder::InsertionGuard guard(b);
         b.setInsertionPointToStart(nLoop.getBody());
@@ -493,6 +495,7 @@ struct BlockwiseGemmAccelRewritePattern
 
         // regsC += regsA * regsB
         auto kLoop = b.create<affine::AffineForOp>(loc, 0, kBasePerThread);
+        kLoop->setAttr("forceUnroll", b.getBoolAttr(true));
         {
           OpBuilder::InsertionGuard guard(b);
           b.setInsertionPointToStart(kLoop.getBody());

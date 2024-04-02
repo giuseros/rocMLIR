@@ -451,8 +451,8 @@ LogicalResult ThreadwiseCopyRewritePattern::matchAndRewrite(
       loc, ArrayRef<ValueRange>{extendedStart, extendedStart},
       ArrayRef<Attribute>{copyFromView, copyToView},
       /*bounds=*/extendedBounds,
-      /*strides=*/extendedStrides, false,
-      /*useIndexDiffs=*/false);
+      /*strides=*/extendedStrides, true,
+      /*useIndexDiffs=*/true);
   {
     PatternRewriter::InsertionGuard outerGuard(b);
     b.setInsertionPointToStart(copyLoop.getBody());
@@ -564,7 +564,7 @@ LogicalResult ThreadwiseReadIntoRewritePattern::matchAndRewrite(
   auto loadLoop = b.create<TransformingForOp>(
       loc, ArrayRef<ValueRange>{readStartCoords, readStartCoords},
       ArrayRef<Attribute>{transforms, b.getArrayAttr({})}, bounds, strides,
-      forceUnroll, useIndexDiffs);
+      forceUnroll, true);
   {
     OpBuilder::InsertionGuard guard(b);
     b.setInsertionPointToStart(loadLoop.getBody());

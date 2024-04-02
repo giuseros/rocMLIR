@@ -18,6 +18,7 @@ include "mlir/Dialect/Rock/IR/RockConvInterface.td"
 include "mlir/Dialect/Rock/IR/RockGemmWrapperInterface.td"
 include "mlir/Dialect/Rock/IR/RockAcceptingViewOpInterface.td"
 include "mlir/Dialect/Rock/IR/RockWriterOpInterface.td"
+include "mlir/Dialect/Rock/IR/RockThreadwiseOpInterface.td"
 include "mlir/Dialect/Rock/IR/RockTuningParamAttrInterface.td"
 include "mlir/Interfaces/ControlFlowInterfaces.td"
 include "mlir/Interfaces/InferIntRangeInterface.td"
@@ -965,7 +966,7 @@ def Rock_GlobalStoreOp :
 // threadwise_read_into
 def Rock_ThreadwiseReadIntoOp :
     Rock_Op<"threadwise_read_into",
-    [DeclareOpInterfaceMethods<RockAcceptingViewOpInterface>,
+    [DeclareOpInterfaceMethods<RockThreadwiseOpInterface>, DeclareOpInterfaceMethods<RockAcceptingViewOpInterface>,
      DeclareOpInterfaceMethods<RockWriterOpInterface>]>,
     AllElementTypesMatch<["source", "dest"]>,
     Arguments<(ins Arg<MemRefOf<NativeMemoryOpTypes>, "source view", [MemRead]>:$source,
@@ -1029,7 +1030,7 @@ def Rock_ThreadwiseReadIntoOp :
 // threadwise_write_all
 def Rock_ThreadwiseWriteAllOp :
     Rock_Op<"threadwise_write_all", [
-      DeclareOpInterfaceMethods<RockAcceptingViewOpInterface>,
+      DeclareOpInterfaceMethods<RockThreadwiseOpInterface>, DeclareOpInterfaceMethods<RockAcceptingViewOpInterface>,
       DeclareOpInterfaceMethods<RockWriterOpInterface>]>,
     AllElementTypesMatch<["source", "dest"]>,
     Arguments<(ins Arg<MemRefRankOf<SupportedMemoryElems, [1]>,
@@ -1208,7 +1209,7 @@ def Rock_ThreadwiseGemmOp:
 }
 // threadwise_accel_gemm
 def Rock_ThreadwiseAccelGemmOp:
-    Rock_Op<"threadwise_accel_gemm">,
+    Rock_Op<"threadwise_accel_gemm", [DeclareOpInterfaceMethods<RockThreadwiseOpInterface>]>,
     Arguments<(ins Arg<MemRefOf<NativeMemoryOpTypes>, "source register view A", [MemRead]>:$matrixA,
                    Arg<MemRefOf<NativeMemoryOpTypes>, "source register view B", [MemRead]>:$matrixB,
                    Arg<MemRefOf<NativeMemoryOpTypes>, "dest register view C", [MemRead, MemWrite]>:$matrixC, Variadic<Index>:$computeIndices,
@@ -1279,7 +1280,7 @@ def Rock_BlockwiseBroadcastReduceOp:
 }
 
 def Rock_ThreadwiseCopyOp :
-    Rock_Op<"threadwise_copy", [DeclareOpInterfaceMethods<RockAcceptingViewOpInterface>, AttrSizedOperandSegments]>,
+    Rock_Op<"threadwise_copy", [DeclareOpInterfaceMethods<RockAcceptingViewOpInterface>, DeclareOpInterfaceMethods<RockThreadwiseOpInterface>, AttrSizedOperandSegments]>,
     AllElementTypesMatch<["source", "dest"]>,
     Arguments<(ins
       Arg<MemRefOf<SupportedMemoryElems>, "source view", [MemRead]>:$source,
